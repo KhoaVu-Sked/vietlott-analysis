@@ -799,7 +799,11 @@ def main():
     ap.add_argument("--runs", type=int, default=10)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--controls", type=int, default=5)
+    ap.add_argument("--no-update", action="store_true")
     args = ap.parse_args()
+    if not args.no_update:
+        import update
+        print(f"data: {update.refresh('645')}")
     rng = random.Random(args.seed)
     RESULTS.mkdir(exist_ok=True)
 

@@ -428,7 +428,11 @@ def main():
     ap.add_argument("--controls", type=int, default=3)
     ap.add_argument("--mc", type=int, default=1_000_000)
     ap.add_argument("--players", type=int, default=5000)
+    ap.add_argument("--no-update", action="store_true")
     args = ap.parse_args()
+    if not args.no_update:
+        import update
+        print(f"data: {update.refresh('655')}")
     use_655_constants()
     rng = random.Random(args.seed)
     RESULTS.mkdir(exist_ok=True)

@@ -146,7 +146,11 @@ def main():
     ap.add_argument("--tickets", type=int, default=10)
     ap.add_argument("--sims", type=int, default=1_000_000)
     ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--no-update", action="store_true")
     args = ap.parse_args()
+    if not args.no_update:
+        import update
+        print(f"data: {update.refresh('645')}")
     k = args.tickets
     rng = random.Random(args.seed)
 

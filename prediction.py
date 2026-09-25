@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Pick Vietlott tickets for the next draw in a Claude Code style terminal session.
+"""Vietlott in a Claude Code style terminal session: get tickets for the next draw, or test the prediction models.
 
 Usage: python3 prediction.py                                 # interactive: arrow keys, type, Enter
-       python3 prediction.py --game 645 --tickets 10         # no questions, plain text output
+       python3 prediction.py --game 645 --tickets 10         # tickets with no questions, plain text output
+       python3 lottery/backtest_models.py                    # model tests with no questions
 """
 
 import argparse
@@ -17,7 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "lottery"))
 
+import backtest_models as bm
 import tui
+import update
 
 MAX_TICKETS = 50
 EXACT_LIMIT = 10
@@ -55,25 +58,6 @@ def game_overview():
     adv655 = 30e9 if power["j1_winners"] else min(power["j1_prize"], 300e9)
     return {"645": (pr.next_draw_date(mega["date"]), adv645, n645),
             "655": (sp.next_draw_date(power["date"]), adv655, n655)}
-
-
-def refresh(game):
-    import collect_prizes as c
-    try:
-        if game == "645":
-            out, fetch, latest = c.OUT, c.fetch, c.latest_id
-        else:
-            import collect_power655 as cp
-            out, fetch, latest = cp.OUT, cp.fetch, cp.latest_id
-        rows = c.load(out)
-        missing = list(range(max(rows) + 1, latest() + 1))
-        for i in missing:
-            rows[i] = fetch(i)
-        if missing:
-            c.save(rows, out)
-        return f"up to date with vietlott.vn ({len(missing)} new draw{'s' if len(missing) != 1 else ''} added)"
-    except Exception as e:
-        return f"could not reach vietlott.vn ({type(e).__name__}), using the saved data"
 
 
 def simulated_any(tickets, n_balls, seed):
@@ -162,7 +146,7 @@ def compute(game, k, seed, update, status):
     note = "not updated (--no-update)"
     if update:
         status("Checking vietlott.vn for new draws")
-        note = refresh(game)
+        note = update.refresh(game)
     return (mega645 if game == "645" else power655)(k, seed, status), note
 
 
@@ -239,17 +223,40 @@ def save(text):
     out.write_text(text.strip() + "\n")
 
 
-def session(seed, update):
+def tests_report(term, result, seconds):
+    s = term.style
+    lines = []
+    for out in result["games"].values():
+        lines.append(s("⏺ ", s.accent) + s(out["game"], s.bold)
+                     + s(f" · tested {out['tested_draws']} · hold-out {out['holdout_draws']}", s.grey))
+        rows = [s(f"{'model':14s}{'hit rate':>9s}{'hold-out':>10s}{'z':>7s}   verdict", s.grey)]
+        for name, r in bm.ranked(out):
+            short = ("beats fair: test on live draws" if r["verdict"].startswith("beats") else
+                     "within luck" if r["z_vs_fair"] > 0 else "no better than random")
+            colour = s.green if short.startswith("beats") else s.grey if short == "within luck" else ""
+            rows.append(f"{name[:14]:14s}{r['hit_rate_pct']:8.2f}%{r['holdout']['hit_rate_pct']:9.2f}%"
+                        f"{r['z_vs_fair']:+7.2f}   " + s(short, colour))
+        lines += term.box(rows, title=f"luck alone catches {out['fair_hit_rate_pct']:.2f}% of the numbers",
+                          colour=s.accent) + [""]
+    notes = {out["data"] for out in result["games"].values()}
+    tried = sum(out["model_versions_tried_on_this_history"] for out in result["games"].values())
+    lines += [s(f"  data: {' / '.join(sorted(notes))} · {seconds:.1f}s", s.dim),
+              s(f"  {tried} model versions tried so far: about 1 in 20 looks good by luck alone", s.dim),
+              s("  add a model: copy models/_template.py · details: results/result.json", s.dim),
+              ""]
+    return lines
+
+
+def session(seed, fetch):
     term = tui.Terminal()
     overview = game_overview()
-    options = []
+    lottery_options = []
     for code in ("645", "655"):
         date, adv, _ = overview[code]
         day = WEEKDAY[dt.date.fromisoformat(date).weekday()][:3]
-        options.append((GAME_NAME[code], f"next draw {day} {date[8:]}/{date[5:7]} · jackpot {adv/1e9:.1f} tỷ"))
-    refreshed = set()
-    game, trail = None, []
-    first = True
+        lottery_options.append((GAME_NAME[code], f"next draw {day} {date[8:]}/{date[5:7]} · jackpot {adv/1e9:.1f} tỷ"))
+    notes = {}
+    state, game, trail, first = "home", None, [], True
 
     def fresh(*extra):
         nonlocal first
@@ -257,39 +264,74 @@ def session(seed, update):
         term.print(*header(term, overview, first), *trail, *extra)
         first = False
 
+    def answer(label, value):
+        return term.style("❯ ", term.style.accent) + term.style(label + " ", term.style.grey) + value
+
+    def next_step(options):
+        choice = term.menu("What next?", [(label, detail) for label, detail, _ in options],
+                           "↑/↓ to move · Enter to choose · Esc for the main menu")
+        return "home" if choice is None else options[choice][2]
+
     with term:
-        while True:
-            if game is None:
-                trail = []
+        while state != "quit":
+            if state == "home":
+                trail, game = [], None
                 fresh()
-                idx = term.menu("Which lottery?", options, "↑/↓ to move · Enter to choose · Esc to quit")
+                choice = term.menu("What would you like to do?",
+                                   [("Get tickets", "numbers for the next draw, with their odds and value"),
+                                    ("Test models", "every model in models/ on every past draw, both games"),
+                                    ("Quit", "")], "↑/↓ to move · Enter to choose · Esc to quit")
+                state = {0: "lottery", 1: "tests"}.get(choice, "quit")
+            elif state == "lottery":
+                trail = [answer("Get", "tickets")]
+                fresh()
+                idx = term.menu("Which lottery?", lottery_options, "↑/↓ to move · Enter to choose · Esc to go back")
                 if idx is None:
-                    break
+                    state = "home"
+                    continue
                 game = ("645", "655")[idx]
-                trail = [term.style("❯ ", term.style.accent) + term.style("Lottery ", term.style.grey) + GAME_NAME[game]]
-            fresh()
-            k = term.ask_number("How many tickets will you buy?", 10, 1, MAX_TICKETS,
-                                f"1-{MAX_TICKETS} tickets, {TICKET:,} VND each · Enter to confirm · Esc to go back")
-            if k is None:
-                game = None
-                continue
-            fresh(term.style("❯ ", term.style.accent) + term.style("Tickets ", term.style.grey) + str(k))
-            (result, note), seconds = term.spin(
-                lambda status: compute(game, k, seed, update and game not in refreshed, status), "Starting")
-            if update:
-                refreshed.add(game)
-            term.clear()
-            term.print(*styled_report(term, result, k, note, seconds))
-            save(plain_report(result, k, note))
-            nxt = term.menu("What next?", [("Pick again", "same lottery, new number of tickets"),
-                                           ("Switch lottery", ""), ("Quit", "")],
-                            "↑/↓ to move · Enter to choose · Esc to quit")
-            if nxt == 0:
-                continue
-            if nxt == 1:
-                game = None
-                continue
-            break
+                trail.append(answer("Lottery", GAME_NAME[game]))
+                state = "tickets"
+            elif state == "tickets":
+                fresh()
+                k = term.ask_number("How many tickets will you buy?", 10, 1, MAX_TICKETS,
+                                    f"1-{MAX_TICKETS} tickets, {TICKET:,} VND each · Enter to confirm · Esc to go back")
+                if k is None:
+                    trail = trail[:1]
+                    state = "lottery"
+                    continue
+                fresh(answer("Tickets", str(k)))
+                fetch_now = fetch and game not in notes
+                (result, note), seconds = term.spin(
+                    lambda status: compute(game, k, seed, fetch_now, status), "Starting")
+                if fetch_now:
+                    notes[game] = note
+                elif fetch:
+                    note = notes[game]
+                term.clear()
+                term.print(*styled_report(term, result, k, note, seconds))
+                save(plain_report(result, k, note))
+                state = next_step([("Pick again", "same lottery, new number of tickets", "tickets"),
+                                   ("Switch lottery", "", "lottery"), ("Main menu", "", "home"),
+                                   ("Quit", "", "quit")])
+                if state == "lottery":
+                    trail = trail[:1]
+            elif state == "tests":
+                trail = [answer("Test", "models")]
+                fresh()
+                games = ("645", "655")
+                todo = tuple(g for g in games if g not in notes) if fetch else ()
+                result, seconds = term.spin(lambda status: bm.run(
+                    games, seed=seed, fetch=bool(todo), status=status), "Starting")
+                for code, out in result["games"].items():
+                    if todo:
+                        notes[code] = out["data"]
+                    elif fetch:
+                        out["data"] = notes[code]
+                term.clear()
+                term.print(*tests_report(term, result, seconds))
+                state = next_step([("Run the tests again", "after changing a model in models/", "tests"),
+                                   ("Get tickets", "", "lottery"), ("Main menu", "", "home"), ("Quit", "", "quit")])
     term.print(term.style("  Good luck, and play within your budget.", term.style.dim), "")
 
 

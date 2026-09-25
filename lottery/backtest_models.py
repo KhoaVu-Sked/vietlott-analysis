@@ -1,9 +1,9 @@
 """Test every prediction model in models/ on every past draw, using only the draws before it each time,
 and write results/result.json (rewritten on every run).
 
-Usage: python3 lottery/backtest_models.py                        # Mega 6/45, every model in models/
-       python3 lottery/backtest_models.py --game 655             # Power 6/55 (main numbers only)
-       python3 lottery/backtest_models.py --models hot30 --fakes 5
+Usage: python3 lottery/backtest_models.py                  # fetch new draws, test every model on both games
+       python3 lottery/backtest_models.py --game 655       # one game only (6/55 uses the main numbers)
+       python3 lottery/backtest_models.py --models hot30 --fakes 5 --no-update
 """
 
 import argparse
@@ -18,6 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 import power645_study as s
+import update
 
 ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
@@ -114,37 +115,28 @@ def versions_tried(game, current):
     return sum(len(v) for v in seen.values())
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--game", choices=sorted(GAMES), default="645")
-    ap.add_argument("--models", nargs="*", default=None)
-    ap.add_argument("--start", type=int, default=50)
-    ap.add_argument("--holdout", type=int, default=300)
-    ap.add_argument("--fakes", type=int, default=3)
-    ap.add_argument("--seed", type=int, default=2026)
-    args = ap.parse_args()
-    game = GAMES[args.game]
+def backtest_game(code, models, start, holdout, fakes_n, seed):
+    game = GAMES[code]
     n_balls, prize = game["balls"], game["prize"]
-    draws, ids = load_game(args.game)
-    models = load_models(args.models)
+    draws, ids = load_game(code)
     fakes = [[sorted(r.sample(range(1, n_balls + 1), K)) for _ in draws]
-             for r in (random.Random(args.seed + 100 + f) for f in range(args.fakes))]
-    split = len(draws) - args.holdout - args.start
-    tried = versions_tried(args.game, {name: h for name, (_, h) in models.items()})
-    out = {"game": game["name"], "generated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
-           "tested_draws": f"#{ids[args.start]}..#{ids[-1]}", "holdout_draws": f"#{ids[-args.holdout]}..#{ids[-1]}",
-           "fair_hit_rate_pct": 100 * K / n_balls, "model_versions_tried_on_this_history": tried,
+             for r in (random.Random(seed + 100 + f) for f in range(fakes_n))]
+    split = len(draws) - holdout - start
+    tried = versions_tried(code, {name: h for name, (_, h) in models.items()})
+    out = {"game": game["name"], "tested_draws": f"#{ids[start]}..#{ids[-1]}",
+           "holdout_draws": f"#{ids[-holdout]}..#{ids[-1]}", "fair_hit_rate_pct": 100 * K / n_balls,
+           "model_versions_tried_on_this_history": tried,
            "warning": (f"{tried} model versions have been scored on this same history. Expect about 1 in 20 to reach"
                        " p_luck < 0.05 by chance alone; only the hold-out and new live draws can confirm a real edge."),
            "models": {}}
     p_values = {}
     for name, (mod, digest) in models.items():
-        hits, gains = run_model(mod, draws, n_balls, args.start, args.seed)
+        hits, gains = run_model(mod, draws, n_balls, start, seed)
         res = summarise(hits, gains, n_balls, prize)
         res["holdout"] = summarise(hits[split:], gains[split:], n_balls, prize)
         fake_z = []
         for f in fakes:
-            fh, fg = run_model(mod, f, n_balls, args.start, args.seed)
+            fh, fg = run_model(mod, f, n_balls, start, seed)
             fake_z.append(summarise(fh, fg, n_balls, prize)["z_vs_fair"])
         res["fake_lotteries_z"] = fake_z
         res["file_sha"] = digest
@@ -153,26 +145,69 @@ def main():
     adjusted = dict(zip(p_values, s.holm(list(p_values.values()))))
     for name, res in out["models"].items():
         res["p_luck_after_holm"] = adjusted[name]
-        hold = res["holdout"]
-        if adjusted[name] < 0.05 and hold["p_luck"] < 0.05:
+        if adjusted[name] < 0.05 and res["holdout"]["p_luck"] < 0.05:
             res["verdict"] = "beats fair on all draws and on the hold-out: freeze it and test on new live draws"
         elif res["z_vs_fair"] > 0:
             res["verdict"] = "a little better than fair, but within what luck produces"
         else:
             res["verdict"] = "no better than a random ticket"
+    return out
+
+
+def run(games, names=None, start=50, holdout=300, fakes=3, seed=2026, fetch=True, status=lambda text: None):
+    models = load_models(names)
+    result = {"generated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "games": {}}
+    for code in games:
+        name = GAMES[code]["name"]
+        if fetch:
+            status(f"Checking vietlott.vn for new {name} draws")
+        note = update.refresh(code) if fetch else "not updated (--no-update)"
+        status(f"Testing {len(models)} models on every {name} draw")
+        out = backtest_game(code, models, start, holdout, fakes, seed)
+        out["data"] = note
+        result["games"][code] = out
     RESULT.parent.mkdir(exist_ok=True)
-    RESULT.write_text(json.dumps(out, indent=1))
+    RESULT.write_text(json.dumps(result, indent=1))
     with RUNS_LOG.open("a") as fh:
-        fh.write(json.dumps({"time": out["generated_at"], "game": args.game,
-                             "models": {n: r["file_sha"] for n, r in out["models"].items()}}) + "\n")
-    print(f"{game['name']}: tested {out['tested_draws']}, hold-out {out['holdout_draws']};"
-          f" a random ticket catches {out['fair_hit_rate_pct']:.2f}% of the numbers")
-    print(f"  {'model':14s} {'hit rate':>8s} {'hold-out':>8s} {'z':>6s} {'p luck':>7s} {'fake z range':>14s}  verdict")
-    for name, r in sorted(out["models"].items(), key=lambda kv: -kv[1]["z_vs_fair"]):
-        print(f"  {name:14s} {r['hit_rate_pct']:7.2f}% {r['holdout']['hit_rate_pct']:7.2f}% {r['z_vs_fair']:+6.2f}"
-              f" {r['p_luck_after_holm']:7.3f} {min(r['fake_lotteries_z']):+6.2f}..{max(r['fake_lotteries_z']):+5.2f}"
-              f"  {r['verdict']}")
-    print(f"  model versions tried on this history: {tried}. Full detail: {RESULT}")
+        for code, out in result["games"].items():
+            fh.write(json.dumps({"time": result["generated_at"], "game": code,
+                                 "models": {n: r["file_sha"] for n, r in out["models"].items()}}) + "\n")
+    return result
+
+
+def ranked(out):
+    return sorted(out["models"].items(), key=lambda kv: -kv[1]["z_vs_fair"])
+
+
+def summary_lines(result):
+    lines = []
+    for out in result["games"].values():
+        lines += [f"{out['game']}: tested {out['tested_draws']}, hold-out {out['holdout_draws']}; data {out['data']};"
+                  f" a random ticket catches {out['fair_hit_rate_pct']:.2f}% of the numbers",
+                  f"  {'model':14s} {'hit rate':>8s} {'hold-out':>8s} {'z':>6s} {'p luck':>7s} {'fake z range':>14s}  verdict"]
+        for name, r in ranked(out):
+            lines.append(f"  {name:14s} {r['hit_rate_pct']:7.2f}% {r['holdout']['hit_rate_pct']:7.2f}%"
+                         f" {r['z_vs_fair']:+6.2f} {r['p_luck_after_holm']:7.3f}"
+                         f" {min(r['fake_lotteries_z']):+6.2f}..{max(r['fake_lotteries_z']):+5.2f}  {r['verdict']}")
+        lines += [f"  model versions tried on this history: {out['model_versions_tried_on_this_history']}", ""]
+    lines.append(f"Full detail: {RESULT}")
+    return lines
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--game", choices=["645", "655", "both"], default="both")
+    ap.add_argument("--models", nargs="*", default=None)
+    ap.add_argument("--start", type=int, default=50)
+    ap.add_argument("--holdout", type=int, default=300)
+    ap.add_argument("--fakes", type=int, default=3)
+    ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--no-update", action="store_true")
+    args = ap.parse_args()
+    games = ("645", "655") if args.game == "both" else (args.game,)
+    result = run(games, args.models, args.start, args.holdout, args.fakes, args.seed, not args.no_update,
+                 lambda text: print(text + "...", flush=True))
+    print("\n".join(summary_lines(result)))
 
 
 if __name__ == "__main__":

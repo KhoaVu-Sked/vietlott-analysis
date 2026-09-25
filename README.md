@@ -14,10 +14,15 @@ Python 3.9 or newer, standard library only. Run every command from the repo root
 python3 prediction.py
 ```
 
-A terminal session in the style of Claude Code: pick the game with the arrow keys and Enter, type how many tickets you
-will buy, and it prints the tickets for the next draw with their chance of winning and their average value. Then pick
-again, switch lottery or quit; Esc goes back. It checks vietlott.vn for new draws first. Skip the questions with
-`python3 prediction.py --game 645 --tickets 10`; the last answer is saved to `results/last_prediction.txt`.
+One command for everything, in a terminal session styled like Claude Code. It checks vietlott.vn for new draws on its
+own, so there is nothing to fetch by hand. The main menu offers:
+
+- **Get tickets**: pick the game with the arrow keys, type how many tickets you will buy, and get the numbers for the
+  next draw with their chance of winning and their average value.
+- **Test models**: run every model in `models/` on every past draw of both games and show how each compares with luck.
+
+Esc goes back a step. Without questions: `python3 prediction.py --game 645 --tickets 10` for tickets, and
+`python3 lottery/backtest_models.py` for the model tests.
 
 ## Layout
 
@@ -29,20 +34,31 @@ again, switch lottery or quit; Esc goes back. It checks vietlott.vn for new draw
 | `predictions/` | frozen pre-draw predictions, their reviews, and the running scorecard |
 | `results/` | generated output, not tracked except the log of model versions tried |
 
-## Everyday commands
+## Update everything at once
 
-Update the data after a draw:
+```bash
+python3 update_all.py
+```
+
+Fetches new draws for both games, then reruns both full studies, the model tests, the forecast backtests and the ticket
+choice, and freezes the next draw's prediction for each game. It takes about 5 minutes; `--quick` skips the two full
+studies. Nothing is stored between runs: every model is fitted again from `data/` each time a script runs.
+
+## Freeze, review and model testing
+
+These cover what `prediction.py` does not: freezing a prediction before a draw and reviewing it afterwards. Every
+command fetches new draws itself (`--no-update` skips it); the collectors only update the data without doing anything else.
 
 ```bash
 python3 lottery/collect_prizes.py
 python3 lottery/collect_power655.py
 ```
 
-Test every model in `models/` on every past draw, using only earlier draws each time. It writes `results/result.json`:
+Test every model in `models/` on every past draw of both games, using only earlier draws each time. It writes
+`results/result.json`; add `--game 645` or `--game 655` for one game, or `--no-update` to skip fetching:
 
 ```bash
 python3 lottery/backtest_models.py
-python3 lottery/backtest_models.py --game 655
 ```
 
 To add a model, copy `models/_template.py` to a new name and change `predict()`. A model only counts as real if it beats

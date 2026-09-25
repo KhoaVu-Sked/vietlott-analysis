@@ -178,7 +178,11 @@ def main():
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--no-update", action="store_true")
     args = ap.parse_args()
+    if not args.no_update:
+        import update
+        print(f"data: {update.refresh('645')}")
     snap = build(args.target, args.seed)
     path = args.out or PRED_DIR / f"draw_{snap['target_draw']:05d}.json"
     if args.out is None and snap["result_known_when_created"]:
