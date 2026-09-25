@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.idea/
+results/*
+!results/backtest_runs.jsonl

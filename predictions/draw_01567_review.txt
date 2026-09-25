@@ -1,0 +1,138 @@
+DRAW #1567 (2026-09-25): 03 15 18 28 33 36   jackpot 124.3 ty VND, won by 0
+  prediction frozen 2026-09-25T10:34:27+07:00, 7.2 h before sales closed: a genuine pre-draw prediction
+  integrity: past data unchanged; predictions reproduce exactly from that data
+
+1. YOUR TICKETS
+  10 recommended tickets: won 0 VND for 100,000 VND; best ticket 2 correct
+       01   20   21   24   35  [36]   1 correct
+       01   22   30   31   39   40    0 correct
+       02   16   17  [28]  29  [36]   2 correct
+       02   22   23   38   42   43    0 correct
+       04   13   24   25   29   30    0 correct
+       04   32   37   38   44   45    0 correct
+       13   14   35   40   41   44    0 correct
+       14   17  [18]  25   26  [33]   2 correct
+       20  [33]  34   37   41   42    1 correct
+       21   27  [28]  31   32   34    1 correct
+      chance this set wins something in any draw: 22.57%; the same set would have won something in 338 of 1,566 past draws (21.6%)
+  5 recommended tickets: won 0 VND for 50,000 VND; best ticket 1 correct
+       01   22   30   31   39   40    0 correct
+       02  [33]  34   37   41   42    1 correct
+      [03]  04   13   23   24   43    1 correct
+       14   25   26   35  [36]  38    1 correct
+       20   21  [28]  29   32   44    1 correct
+      chance this set wins something in any draw: 11.87%; the same set would have won something in 171 of 1,566 past draws (10.9%)
+  Bao 7 on the least-picked numbers: won 0 VND for 70,000 VND; best ticket 0 correct
+       01   30   31   34   40   41    0 correct
+       01   30   31   34   40   42    0 correct
+       01   30   31   34   41   42    0 correct
+       01   30   31   40   41   42    0 correct
+       01   30   34   40   41   42    0 correct
+       01   31   34   40   41   42    0 correct
+       30   31   34   40   41   42    0 correct
+      chance this set wins something in any draw: 3.94%; the same set would have won something in 54 of 1,566 past draws (3.4%)
+
+2. EACH MODEL'S CHANCES vs WHAT HAPPENED (why it was right or wrong)
+  track record = the same model predicting each of draws #267..#1566 from earlier draws only
+  uniform (fair lottery): no preference, so nothing to be right or wrong about
+      it gives every number the same 13.33%.
+      its top 6 07 08 15 21 33 43 caught 2 (fair expectation 0.8); drawn numbers sat at average position 23.0 of 45 in its list (fair 23.0); it gave them 0.800 in total (fair 0.800)
+      record: better than fair in 0% of 1,300 past draws, average -0.0 milli-nats per draw, top-6 hits 0.805 per draw
+  frequency / hot all-time (no pooling): worse than fair this draw (typical for it: this score beat 24% of its past draws)
+      it favours numbers drawn most often since 2016.
+      its top 6 07 10 19 24 37 44 caught 0 (fair expectation 0.8); drawn numbers sat at average position 29.8 of 45 in its list (fair 23.0); it gave them 0.780 in total (fair 0.800)
+      record: better than fair in 45% of 1,300 past draws, average -30.4 milli-nats per draw, top-6 hits 0.792 per draw
+  hierarchical Beta-Binomial (partial pooling): no preference, so nothing to be right or wrong about
+      it asks the whole history how unequal the numbers are; so far the answer is 'not at all', so it stays at 13.33%.
+      its top 6 07 10 19 24 37 44 caught 0 (fair expectation 0.8); drawn numbers sat at average position 23.0 of 45 in its list (fair 23.0); it gave them 0.800 in total (fair 0.800)
+      record: better than fair in 48% of 1,300 past draws, average -0.4 milli-nats per draw, top-6 hits 0.793 per draw
+  hot last 30 draws: better than fair this draw (typical for it: this score beat 91% of its past draws)
+      it favours numbers drawn most often in the last 30 draws.
+      its top 6 03 12 16 27 31 43 caught 1 (fair expectation 0.8); drawn numbers sat at average position 16.0 of 45 in its list (fair 23.0); it gave them 0.987 in total (fair 0.800)
+      record: better than fair in 32% of 1,300 past draws, average -526.3 milli-nats per draw, top-6 hits 0.782 per draw
+  exponentially weighted hot: better than fair this draw (typical for it: this score beat 86% of its past draws)
+      it favours recently drawn numbers, fading older draws.
+      its top 6 06 12 15 16 26 27 caught 1 (fair expectation 0.8); drawn numbers sat at average position 17.3 of 45 in its list (fair 23.0); it gave them 0.909 in total (fair 0.800)
+      record: better than fair in 36% of 1,300 past draws, average -344.7 milli-nats per draw, top-6 hits 0.782 per draw
+  overdue / cold (gambler's fallacy): worse than fair this draw (typical for it: this score beat 24% of its past draws)
+      it favours numbers that have not come up for the longest time.
+      its top 6 05 08 24 28 30 42 caught 1 (fair expectation 0.8); drawn numbers sat at average position 26.8 of 45 in its list (fair 23.0); it gave them 0.638 in total (fair 0.800)
+      record: better than fair in 11% of 1,300 past draws, average -3232.2 milli-nats per draw, top-6 hits 0.790 per draw
+  Markov: follows last draw: worse than fair this draw (typical for it: this score beat 45% of its past draws)
+      it favours numbers that have tended to follow the previous draw's numbers.
+      its top 6 04 07 10 25 28 37 caught 1 (fair expectation 0.8); drawn numbers sat at average position 24.5 of 45 in its list (fair 23.0); it gave them 0.797 in total (fair 0.800)
+      record: better than fair in 45% of 1,300 past draws, average -48.8 milli-nats per draw, top-6 hits 0.807 per draw
+  logistic regression: better than fair this draw (typical for it: this score beat 94% of its past draws)
+      it weighs recent and long-run frequency and gaps, fitted on the last 400 draws.
+      its top 6 03 11 17 33 38 39 caught 2 (fair expectation 0.8); drawn numbers sat at average position 17.7 of 45 in its list (fair 23.0); it gave them 0.824 in total (fair 0.800)
+      record: better than fair in 47% of 1,300 past draws, average -10.6 milli-nats per draw, top-6 hits 0.794 per draw
+  naive Bayes: better than fair this draw (typical for it: this score beat 79% of its past draws)
+      it uses the same signals as logistic regression, combined with a naive Bayes rule.
+      its top 6 13 17 32 33 39 40 caught 1 (fair expectation 0.8); drawn numbers sat at average position 19.0 of 45 in its list (fair 23.0); it gave them 0.813 in total (fair 0.800)
+      record: better than fair in 45% of 1,300 past draws, average -29.6 milli-nats per draw, top-6 hits 0.758 per draw
+  why: every draw is a fresh random pick of 6 balls from 45, and the machine keeps no memory. A model 'wins' a draw when the balls happen to land where it leaned, and 'loses' when they don't. The score punishes a model hardest when it gave a drawn number a very low chance.
+  over the whole track record 0 of 9 models beat fair on average; leaning on any pattern has cost more than it gained
+
+3. THE 6 DRAWN NUMBERS: history and rates before this draw
+  no times   rate last30 waited co-pick tags               fair     freq     hier    hot30     ewma  overdue   markov    logit   nbayes   <- each model's chance and its rank of 45
+  03   193 12.32%      7      4   1.01x hot            13.3% 23 12.3% 43 13.3% 23 21.3%  6 18.5%  7  6.4% 29 13.1% 29 15.0%  1 13.9%  9
+  15   196 12.52%      7      1   1.02x hot            13.3% 23 12.5% 39 13.3% 23 21.3%  6 19.8%  4  1.6% 42 10.8% 45 13.3% 21 12.7% 38
+  18   206 13.15%      4      4   1.02x                13.3% 23 13.2% 26 13.3% 23 13.3% 20 11.9% 27  6.4% 29 13.3% 24 13.0% 29 13.6% 19
+  28   221 14.11%      1     22   1.02x cold,overdue   13.3% 23 14.1%  8 13.3% 23  5.3% 42  7.8% 42 35.1%  4 16.0%  2 12.4% 44 12.8% 36
+  33   204 13.03%      6      2   0.96x hot            13.3% 23 13.0% 29 13.3% 23 18.7% 10 15.1% 16  3.2% 37 13.1% 28 14.8%  2 14.3%  2
+  36   201 12.84%      6      7   0.98x hot            13.3% 23 12.8% 34 13.3% 23 18.7% 10 17.9%  8 11.2% 20 13.5% 19 14.0%  9 13.9% 10
+  fair: rate 13.33%, last30 4.0, waited 7.5 draws on average
+  hot: 4 of the 6 drawn were hot (expected 1.6 from 12 hot numbers; chance of a count this far from expected 7%)
+  cold: 1 of the 6 drawn was cold (expected 1.6 from 12 cold numbers; chance of a count this far from expected 97%)
+  overdue: 1 of the 6 drawn was overdue (expected 0.9 from 7 overdue numbers; chance of a count this far from expected 100%)
+
+4. PATTERN vs THE PAST
+  pattern                                  this draw chance of it past draws same fair average  how unusual
+  sum of the 6 numbers                           133         1.3%            1.5%        138.0  normal 0.88
+  odd numbers                                      3        33.5%           34.8%          3.1  normal 1.00
+  low numbers (1-22)                               3        33.5%           33.7%          2.9  normal 1.00
+  consecutive pairs (like 25-26)                   0        47.1%           48.7%          0.7  normal 0.94
+  bands of five used (1-5, 6-10, ...)              6        16.1%           17.1%          4.8  normal 0.32
+  spread (largest minus smallest)                 33         5.3%            5.4%         32.9  normal 0.97
+  numbers repeated from the previous draw          1        42.4%           42.0%          0.8  normal 1.00
+  how unusual = chance a fair draw lands at least this far from average (below 0.05 = rare)
+  closest past draws share 4 numbers: #1144 (2024-01-07), #586 (2020-05-15)
+      chance that some past draw shares 4+ numbers with a random draw: 88.7%
+  pairs inside this draw: most seen before (18, 33) x28, least (15, 28) x13 (fair average 23.7 each)
+  triples inside this draw seen before: 18 of 20 (fair average 17.8); most seen (3, 15, 36) x6
+
+5. DEVIATION SUMMARY: how far each prediction was from the result
+  model                                          score vs fair avg position chance given top-6 hits percentile
+  uniform (fair lottery)                               -0.0 mn         23.0        0.800          2        n/a
+  frequency / hot all-time (no pooling)              -183.9 mn         29.8        0.780          0        24%
+  hierarchical Beta-Binomial (partial pooling)         -0.0 mn         23.0        0.800          0        n/a
+  hot last 30 draws                                  +831.0 mn         16.0        0.987          1        91%
+  exponentially weighted hot                         +566.2 mn         17.3        0.909          1        86%
+  overdue / cold (gambler's fallacy)                -4998.4 mn         26.8        0.638          1        24%
+  Markov: follows last draw                           -68.6 mn         24.5        0.797          1        45%
+  logistic regression                                +193.5 mn         17.7        0.824          2        94%
+  naive Bayes                                        +100.4 mn         19.0        0.813          1        79%
+  fair lottery: score 0, position 23.0, chance 0.800, hits 0.8 on average. mn = milli-nats of log-score: above 0 beat fair, below 0 did worse. percentile = share of the model's past draws that scored lower
+
+6. SALES, JACKPOT AND WINNERS: forecast vs actual
+  tickets sold: forecast 3,563,314, actual 3,412,095 (+4.4%; past median error about 3.4%)
+  jackpot at the draw: forecast 125.21 ty, actual 124.27 ty (+0.76%)
+  jackpot won: forecast chance 32.3%, actual no
+  drawn numbers' popularity: players' co-pick factor for this combination x1.05 (1.00 = average)
+  5 correct: forecast before the draw 103; knowing the numbers 103; actual 113 (-9% after, -9% before)
+  4 correct: forecast before the draw 4,871; knowing the numbers 4,677; actual 4,952 (-6% after, -2% before)
+  3 correct: forecast before the draw 79,902; knowing the numbers 76,694; actual 79,097 (-3% after, +1% before)
+
+7. RUNNING SCORECARD: 1 genuine pre-draw prediction(s) so far
+  uniform (fair lottery)                         total score vs fair     -0.0 mn; top-6 hits 2 in 1 draw(s) (fair expectation 0.8)
+  frequency / hot all-time (no pooling)          total score vs fair   -183.9 mn; top-6 hits 0 in 1 draw(s) (fair expectation 0.8)
+  hierarchical Beta-Binomial (partial pooling)   total score vs fair     -0.0 mn; top-6 hits 0 in 1 draw(s) (fair expectation 0.8)
+  hot last 30 draws                              total score vs fair   +831.0 mn; top-6 hits 1 in 1 draw(s) (fair expectation 0.8)
+  exponentially weighted hot                     total score vs fair   +566.2 mn; top-6 hits 1 in 1 draw(s) (fair expectation 0.8)
+  overdue / cold (gambler's fallacy)             total score vs fair  -4998.4 mn; top-6 hits 1 in 1 draw(s) (fair expectation 0.8)
+  Markov: follows last draw                      total score vs fair    -68.6 mn; top-6 hits 1 in 1 draw(s) (fair expectation 0.8)
+  logistic regression                            total score vs fair   +193.5 mn; top-6 hits 2 in 1 draw(s) (fair expectation 0.8)
+  naive Bayes                                    total score vs fair   +100.4 mn; top-6 hits 1 in 1 draw(s) (fair expectation 0.8)
+  10 recommended tickets: won 0 VND for 100,000 VND spent
+  5 recommended tickets: won 0 VND for 50,000 VND spent
+  Bao 7 on the least-picked numbers: won 0 VND for 70,000 VND spent
