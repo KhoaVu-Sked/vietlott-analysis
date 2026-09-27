@@ -189,9 +189,9 @@ def lotto535(k, seed, status, goal):
             "share_out_now": f["share_out_now"]}
 
 
-def compute(game, k, seed, update, status, goal="win"):
+def compute(game, k, seed, fetch, status, goal="win"):
     note = "not updated (--no-update)"
-    if update:
+    if fetch:
         status("Checking vietlott.vn for new draws")
         note = update.refresh(game)
     return {"645": mega645, "655": power655, "535": lotto535}[game](k, seed, status, goal), note
