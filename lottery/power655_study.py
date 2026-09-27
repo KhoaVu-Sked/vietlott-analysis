@@ -16,6 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import backtest_checkpoints as b
+import coverage
 import optimise_tickets as o
 import power645_study as s
 import predict_draw as pr
@@ -515,8 +516,8 @@ def main():
     fc = forecast(sales)
     target = draws[-1]["id"] + 1
     target_date = next_draw_date(draws[-1]["date"])
-    coverage = j1_w / e1
-    p_won1 = 1 - math.exp(-fc["tickets"] * P_J1 * coverage)
+    coverage_factor = j1_w / e1
+    p_won1 = 1 - math.exp(-fc["tickets"] * P_J1 * coverage_factor)
     p_won2 = 1 - math.exp(-fc["tickets"] * P_J2 * (j2_w / e2))
     ev_r = expected_value(fc["j1"], fc["j2"], fc["tickets"])
     print(f"\nPART E - NEXT DRAW #{target} ({target_date}): forecast and expected value")
@@ -549,6 +550,7 @@ def main():
     trng = random.Random(args.seed)
     designs = {}
     for k in (5, 10):
+        designs[f"{k} most chance to win"] = coverage.design(k, N, args.seed)
         designs[f"{k} spread + unpopular"] = o.optimise(scorer, k, 0 if k <= 6 else 1, trng, max_uses=2)
         designs[f"{k} random quick picks"] = [sorted(trng.sample(range(1, N + 1), K)) for _ in range(k)]
     sim = simulate(designs, args.mc, random.Random(args.seed + 1), fc["j1"], fc["j2"])
@@ -563,7 +565,7 @@ def main():
               f" {ex['five']*100:9.4f}% 1 in {1/ex['j2_any']:>9,.0f} 1 in {1/ex['j1_any']:>9,.0f}"
               f" {ev:9,.0f} {ev/(len(d)*TICKET):8.2f}")
     for name, d in designs.items():
-        if "spread" in name:
+        if "spread" in name or "chance" in name:
             print(f"  {name}:")
             for t in d:
                 e = scorer.ev(t)
@@ -594,7 +596,7 @@ def main():
                                                for d in draws]),
             "seed": args.seed, "hierarchical_kappa": kappa, "fair_p": K / N, "models": models,
             "forecast": report["next"],
-            "tickets": {name: d for name, d in designs.items() if "spread" in name}}
+            "tickets": {name: d for name, d in designs.items() if "spread" in name or "chance" in name}}
     print("\nPART H - EACH MODEL'S CHANCE FOR EVERY NUMBER IN THE NEXT DRAW (fair = 10.91% each)")
     for name, m in models.items():
         p = m["p"]

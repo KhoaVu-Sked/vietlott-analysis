@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Bring everything up to date in one go: fetch new draws for both games, rerun every study and backtest, choose the
-tickets and freeze the next draws' predictions. Each step's output is saved under results/.
+"""Bring everything up to date in one go: fetch new draws for all three games, rerun every study and backtest, choose
+the tickets and freeze the next Mega 6/45 and Power 6/55 predictions. Each step's output is saved under results/.
 
 Usage: python3 update_all.py
        python3 update_all.py --quick      # skip the two full studies, which take most of the time
@@ -23,7 +23,8 @@ import update
 
 FIRST_WAVE = [
     ("Mega 6/45 full study", ["power645_study.py", "--no-update"], "latest_run.txt", True),
-    ("Model tests, both games", ["backtest_models.py", "--no-update"], "backtest_models.txt", False),
+    ("Lotto 5/35 study and share-out forecast", ["lotto535_study.py", "--no-update"], "lotto535_run.txt", False),
+    ("Model tests, all three games", ["backtest_models.py", "--no-update"], "backtest_models.txt", False),
     ("Forecast backtest, last 10 draws", ["backtest_checkpoints.py", "--count", "10"], "checkpoints_10x1.txt", False),
     ("Forecast backtest, last 300 draws", ["backtest_checkpoints.py", "--count", "300"], "checkpoints_300x1.txt", False),
     ("Mega 6/45 tickets, 5", ["optimise_tickets.py", "--tickets", "5", "--sims", "200000", "--no-update"],
@@ -99,6 +100,14 @@ def headlines():
         lines.append(f"Power 6/55: {len(p.get('tests', [])) - failed} of {len(p.get('tests', []))} randomness tests pass"
                      + (f"; next Jackpot 1 ≈ {nxt['j1']/1e9:.1f} tỷ, a ticket is worth"
                         f" {nxt['ev_random']['ev']/10_000:.2f}× its price" if nxt else ""))
+    lotto = ROOT / "results" / "lotto535_latest.json"
+    if lotto.exists():
+        q = json.loads(lotto.read_text())
+        failed = sum(t["holm_p"] < 0.05 for t in q.get("tests", []))
+        nso = q.get("next_share_out")
+        lines.append(f"Lotto 5/35: {len(q.get('tests', [])) - failed} of {len(q.get('tests', []))} randomness tests pass"
+                     + (f"; next jackpot share-out most likely {nso['date']} {nso['time']}, forecast {nso['ev']/10_000:.2f}×"
+                        f" the price after tax (past share-outs {q['share_outs']['after_tax']/10_000:.2f}×)" if nso else ""))
     if tests.exists():
         r = json.loads(tests.read_text())
         beat = [f"{name} ({out['game']})" for out in r.get("games", {}).values()
@@ -131,7 +140,7 @@ def main():
     (ROOT / "results").mkdir(exist_ok=True)
     begin = time.time()
     term.print(s("✻ ", s.accent) + s("Updating everything", s.bold), "")
-    for game, name in (("645", "Mega 6/45"), ("655", "Power 6/55")):
+    for game, name in (("645", "Mega 6/45"), ("655", "Power 6/55"), ("535", "Lotto 5/35")):
         note = "not updated (--no-update)" if args.no_update else update.refresh(game)
         term.print(f"  {s('✓', s.green) if 'could not' not in note else s('!', s.yellow)} {name} data: {note}")
     results = []

@@ -143,13 +143,14 @@ class Terminal:
             raw = input("Number: ").strip()
             return int(raw) - 1 if raw.isdigit() and 1 <= int(raw) <= len(options) else None
         idx = 0
+        column = max(16, max(len(f"{i + 1}. {label}") for i, (label, _) in enumerate(options)))
         while True:
             rows = [s(question, s.bold)]
             for i, (label, detail) in enumerate(options):
                 chosen = i == idx
                 pointer = s("❯", s.accent) if chosen else " "
                 name = s(f"{i + 1}. {label}", s.accent) if chosen else f"{i + 1}. {label}"
-                rows.append(f"{pointer} {pad(name, 16)}  {s(detail, s.grey)}" if detail else f"{pointer} {name}")
+                rows.append(f"{pointer} {pad(name, column)}  {s(detail, s.grey)}" if detail else f"{pointer} {name}")
             self.live(self.box(rows, colour=s.grey) + ["  " + s(hint, s.dim)])
             for key in self.keys():
                 if key in ("up", "k"):

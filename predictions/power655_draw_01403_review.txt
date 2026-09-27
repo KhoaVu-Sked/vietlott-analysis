@@ -1,0 +1,46 @@
+POWER 6/55 DRAW #1403 (2026-09-26): 14 18 21 38 48 52 + bonus 49   Jackpot 1 91.4 ty won by 0, Jackpot 2 3.51 ty won by 0
+  prediction frozen 2026-09-25T23:08:47+07:00, 18.6 h before sales closed; predictions reproduce exactly from the earlier data
+
+1. YOUR TICKETS
+  5 spread + unpopular:
+       01   43   46   51   54   55    0 correct
+       02   30   33   34   47  [48]   1 correct
+      [14] [21]  29   36   37   50    2 correct
+       16   35   42   44   45  [52]   1 correct
+       31   32   40   41  <49>  53    0 correct
+      won 0 VND for 50,000 VND; chance this set wins something in any draw 6.65%   ([x] = main number drawn, <x> = the bonus)
+  10 spread + unpopular:
+       01   16   36   37   44  [52]   1 correct
+       01   41  [48] <49>  54   55    1 correct
+       02  [14]  30   33   43   44    1 correct
+       02   34   35   50  [52]  55    1 correct
+      [21]  22   32   45   47  <49>   1 correct
+      [21]  29   35   37   42   43    1 correct
+       29   40   45   46   50   54    0 correct
+       30   34   46   47   51   53    0 correct
+       31   32   36   41   42   53    0 correct
+       31   33   39   40  [48]  51    1 correct
+      won 0 VND for 100,000 VND; chance this set wins something in any draw 12.86%   ([x] = main number drawn, <x> = the bonus)
+
+2. EACH MODEL'S CHANCES vs WHAT HAPPENED
+  track record = the same model predicting draws #273..#1402 from earlier draws only; fair: position 28.0 of 55, total chance 0.655, top-6 hits 0.65
+  uniform (fair lottery)                         no preference; top 6 caught 1, drawn numbers at position 28.0, chance given 0.655; record better than fair in 0% of 1,130 draws
+  frequency / hot all-time (no pooling)          worse than fair; this score beat 50% of its past draws; top 6 caught 0, drawn numbers at position 28.8, chance given 0.653; record better than fair in 46% of 1,130 draws
+  hierarchical Beta-Binomial (partial pooling)   worse than fair; this score beat 3% of its past draws; top 6 caught 0, drawn numbers at position 28.8, chance given 0.654; record better than fair in 50% of 1,130 draws
+  hot last 30 draws                              worse than fair; this score beat 24% of its past draws; top 6 caught 0, drawn numbers at position 29.4, chance given 0.613; record better than fair in 31% of 1,130 draws
+  exponentially weighted hot                     worse than fair; this score beat 20% of its past draws; top 6 caught 0, drawn numbers at position 31.3, chance given 0.586; record better than fair in 34% of 1,130 draws
+  overdue / cold (gambler's fallacy)             better than fair; this score beat 94% of its past draws; top 6 caught 1, drawn numbers at position 19.8, chance given 1.092; record better than fair in 15% of 1,130 draws
+  Markov: follows last draw                      worse than fair; this score beat 17% of its past draws; top 6 caught 0, drawn numbers at position 36.0, chance given 0.619; record better than fair in 43% of 1,130 draws
+  logistic regression                            better than fair; this score beat 88% of its past draws; top 6 caught 0, drawn numbers at position 23.8, chance given 0.667; record better than fair in 47% of 1,130 draws
+  naive Bayes                                    better than fair; this score beat 93% of its past draws; top 6 caught 1, drawn numbers at position 21.8, chance given 0.676; record better than fair in 49% of 1,130 draws
+
+3. PATTERN vs THE PAST
+  sum                                191   fair average  168.0   normal (0.55)
+  odd numbers                          1   fair average    3.1   normal (0.18)
+  consecutive pairs                    0   fair average    0.5   normal (1.00)
+  repeats from the previous draw       0   fair average    0.7   normal (0.96)
+
+4. SALES AND JACKPOTS: forecast vs actual
+  tickets sold: forecast 1,966,080, actual 2,004,694 (-1.9%)
+  Jackpot 1 at the draw: forecast 91.44 ty, actual 91.39 ty; Jackpot 2: forecast 3.52 ty, actual 3.51 ty
+  forecast chance Jackpot 1 won 5.7% (actual no), Jackpot 2 33.7% (actual no)

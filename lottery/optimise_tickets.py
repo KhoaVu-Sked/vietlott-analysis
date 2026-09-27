@@ -11,6 +11,7 @@ from collections import Counter
 from itertools import combinations
 
 import backtest_checkpoints as b
+import coverage
 import power645_study as s
 
 HOT_WINDOW = 30
@@ -168,6 +169,7 @@ def main():
           f" hot-number effect exp({g:+.4f} x excess appearances in last {HOT_WINDOW} draws)")
 
     designs = {
+        "most chance to win": coverage.design(k, s.N_BALLS, args.seed),
         "spread + unpopular (recommended)": optimise(scorer, k, 0 if k <= 6 else 1, rng, max_uses=2),
         "all unpopular, overlapping": optimise(scorer, k, s.K - 1, rng),
         "random quick picks": [sorted(rng.sample(range(1, s.N_BALLS + 1), s.K)) for _ in range(k)],

@@ -22,7 +22,9 @@ SHORT = {"uniform (fair lottery)": "fair", "hierarchical Beta-Binomial (partial 
          "frequency / hot all-time (no pooling)": "freq", "hot last 30 draws": "hot30",
          "exponentially weighted hot": "ewma", "overdue / cold (gambler's fallacy)": "overdue",
          "Markov: follows last draw": "markov", "logistic regression": "logit", "naive Bayes": "nbayes"}
-TICKET_SETS = ((10, "spread + unpopular (recommended)", "10 recommended tickets"),
+TICKET_SETS = ((10, "most chance to win", "10 tickets, most chance to win"),
+               (5, "most chance to win", "5 tickets, most chance to win"),
+               (10, "spread + unpopular (recommended)", "10 recommended tickets"),
                (5, "spread + unpopular (recommended)", "5 recommended tickets"),
                (7, "Bao 7 on least-picked numbers", "Bao 7 on the least-picked numbers"))
 

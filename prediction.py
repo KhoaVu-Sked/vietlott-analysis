@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "lottery"))
 
 import backtest_models as bm
+import coverage
 import tui
 import update
 
@@ -27,7 +28,10 @@ EXACT_LIMIT = 10
 SIMS = 200_000
 TICKET = 10_000
 WEEKDAY = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-GAME_NAME = {"645": "Mega 6/45", "655": "Power 6/55"}
+GAME_NAME = {"645": "Mega 6/45", "655": "Power 6/55", "535": "Lotto 5/35"}
+GAMES = ("645", "655", "535")
+GOALS = {"win": ("Most chance to win", "every number used, least overlap"),
+         "value": ("Best value", "bigger jackpot share, avoids popular numbers")}
 
 
 @contextlib.contextmanager
@@ -50,24 +54,30 @@ def last_row(path):
 
 
 def game_overview():
+    import lotto535_study as ls
     import power655_study as sp
     import predict_draw as pr
     mega, n645 = last_row(ROOT / "data" / "mega645.jsonl")
     power, n655 = last_row(ROOT / "data" / "power655.jsonl")
+    lotto, n535 = last_row(ROOT / "data" / "lotto535.jsonl")
     adv645 = 12e9 if mega["jackpot_winners"] else mega["jackpot_value"]
     adv655 = 30e9 if power["j1_winners"] else min(power["j1_prize"], 300e9)
-    return {"645": (pr.next_draw_date(mega["date"]), adv645, n645),
-            "655": (sp.next_draw_date(power["date"]), adv655, n655)}
+    adv535 = ls.J_MIN if lotto["jackpot_winners"] or ls.is_share_out(lotto) else lotto["jackpot_prize"]
+    rows, _ = ls.load_draws()
+    day535, hour535 = ls.draw_time(lotto["id"] + 1, rows)
+    return {"645": {"date": pr.next_draw_date(mega["date"]), "time": "18:00", "jackpot": adv645, "draws": n645},
+            "655": {"date": sp.next_draw_date(power["date"]), "time": "18:00", "jackpot": adv655, "draws": n655},
+            "535": {"date": str(day535), "time": hour535, "jackpot": adv535, "draws": n535}}
 
 
-def simulated_any(tickets, n_balls, seed):
+def simulated_any(tickets, n_balls, seed, size=6):
     rng = random.Random(seed)
     masks = [sum(1 << x for x in t) for t in tickets]
     balls = range(1, n_balls + 1)
     hit = 0
     for _ in range(SIMS):
         drawn = 0
-        for x in rng.sample(balls, 6):
+        for x in rng.sample(balls, size):
             drawn |= 1 << x
         hit += any(bin(drawn & m).count("1") >= 3 for m in masks)
     return hit / SIMS
@@ -86,7 +96,7 @@ def spread_design(optimise, scorer, k, n_balls, seed):
     raise RuntimeError("could not build a ticket set")
 
 
-def mega645(k, seed, status):
+def mega645(k, seed, status, goal):
     import backtest_checkpoints as b
     import optimise_tickets as o
     import power645_study as s
@@ -104,20 +114,21 @@ def mega645(k, seed, status):
     fc = s.forecast_sales(sales)
     scorer = o.Scorer(bundle, g, recent, fc["jackpot"], fc["tickets"])
     status("Choosing your tickets")
-    tickets = spread_design(o.optimise, scorer, k, s.N_BALLS, seed)
+    tickets = coverage.design(k, s.N_BALLS, seed) if goal == "win" else spread_design(o.optimise, scorer, k, s.N_BALLS, seed)
     status("Working out the exact odds" if k <= EXACT_LIMIT else f"Simulating {SIMS:,} draws")
     p_any = float(v.summarise(v.enumerate_all(tickets), k)["any"]) if k <= EXACT_LIMIT else simulated_any(
         tickets, s.N_BALLS, seed)
     share = s.jackpot_share_check(sales)
     p_won = 1 - math.exp(-fc["tickets"] * s.P_MATCH[6] * share["winners"] / share["expected_winners"])
-    return {"game": "Mega 6/45", "draw": draws[-1]["id"] + 1, "date": pr.next_draw_date(draws[-1]["date"]),
+    return {"game": "Mega 6/45", "goal": goal, "p_one": sum(s.P_MATCH[3:]),
+            "draw": draws[-1]["id"] + 1, "date": pr.next_draw_date(draws[-1]["date"]),
             "n_draws": len(draws), "tickets": tickets, "p_any": p_any, "p_jackpot": k / s.C_TOTAL,
             "ev": sum(scorer.ev(t)["ev"] for t in tickets),
             "forecast": [f"jackpot at the draw ≈ {fc['jackpot']/1e9:.1f} tỷ (now {fc['advertised']/1e9:.1f} tỷ)"
                          f" · someone wins it: {p_won*100:.0f}%"]}
 
 
-def power655(k, seed, status):
+def power655(k, seed, status, goal):
     import backtest_checkpoints as b
     import optimise_tickets as o
     with power655_constants() as sp:
@@ -128,47 +139,96 @@ def power655(k, seed, status):
         fc = sp.forecast(sales)
         scorer = sp.Scorer(bundle, fc["j1"], fc["j2"], fc["tickets"])
         status("Choosing your tickets")
-        tickets = spread_design(o.optimise, scorer, k, sp.N, seed)
+        tickets = coverage.design(k, sp.N, seed) if goal == "win" else spread_design(o.optimise, scorer, k, sp.N, seed)
         status("Working out the exact odds" if k <= EXACT_LIMIT else f"Simulating {SIMS:,} draws")
         exact = sp.exact_summary(tickets)[0] if k <= EXACT_LIMIT else {
             "any": simulated_any(tickets, sp.N, seed), **sp.jackpot_chances(tickets)}
         j1_w = sum(r["j1_winners"] for r in sales)
         e1 = sum(r["tickets"] * sp.P_J1 for r in sales)
         p_won1 = 1 - math.exp(-fc["tickets"] * sp.P_J1 * j1_w / e1)
-        return {"game": "Power 6/55", "draw": draws[-1]["id"] + 1, "date": sp.next_draw_date(draws[-1]["date"]),
+        return {"game": "Power 6/55", "goal": goal, "p_one": sum(sp.P_MATCH[3:]),
+                "draw": draws[-1]["id"] + 1, "date": sp.next_draw_date(draws[-1]["date"]),
                 "n_draws": len(draws), "tickets": tickets, "p_any": exact["any"], "p_jackpot": exact["j1_any"],
                 "p_jackpot2": exact["j2_any"], "ev": sum(scorer.ev(t)["ev"] for t in tickets),
                 "forecast": [f"Jackpot 1 at the draw ≈ {fc['j1']/1e9:.1f} tỷ · someone wins it: {p_won1*100:.0f}%",
                              f"Jackpot 2 ≈ {fc['j2']/1e9:.2f} tỷ · needs 5 numbers plus the bonus ball"]}
 
 
-def compute(game, k, seed, update, status):
+def lotto535(k, seed, status, goal):
+    import lotto535_study as ls
+    status("Reading 900+ past draws and the share-out history")
+    f = ls.forecast_next(seed)
+    status("Choosing your tickets")
+    tickets = ls.with_specials(coverage.design(k, ls.N, seed, size=ls.K))
+    status("Working out the exact odds" if k <= 2 * EXACT_LIMIT else f"Simulating {SIMS:,} draws")
+    if k <= 2 * EXACT_LIMIT:
+        money, p_real = ls.exact_money(tickets, dict(ls.BASE, jackpot=f["jackpot"]))
+        total = sum(money.values())
+        p_refund = sum(w for v, w in money.items() if v > 0) / total
+    else:
+        p_real = simulated_any([m for m, _ in tickets], ls.N, seed, size=ls.K)
+        p_refund = 1 - (1 - p_real) * (1 - min(k, ls.S) / ls.S)
+    p_won = 1 - math.exp(-f["tickets"] * ls.P_JP * f["coverage"])
+    lines = [f"jackpot at the draw ≈ {f['jackpot']/1e9:.2f} tỷ (now {f['jackpot_now']/1e9:.2f} tỷ) · someone wins it:"
+             f" {p_won*100:.0f}%"]
+    so = f.get("share_out")
+    if f["share_out_now"]:
+        lines.append(f"SHARE-OUT DRAW: if nobody wins the jackpot ({so['p_share']*100:.0f}% likely), it is shared out to the"
+                     f" 3, 4 and 5-correct winners; worth about {so['ev']/1e4:.2f}× the price after tax")
+    elif so:
+        day = f"{f['share_date'][8:]}/{f['share_date'][5:7]} {f['share_time']}"
+        when_so = f"scheduled for {day}" if f["scheduled"] else (
+            f"most likely {day}, {f['p14']*100:.0f}% chance within 14 days")
+        lines.append(f"next jackpot share-out: {when_so}")
+        lines.append(f"share-out forecast {so['ev']/1e4:.2f}× the price after tax · past {f['history_after_tax']/1e4:.2f}×,"
+                     f" the last 6 {f['last6_after_tax']/1e4:.2f}×")
+    return {"game": "Lotto 5/35", "goal": "win", "p_one": ls.P_TIER["first"] + ls.P_TIER["second"] + ls.P_TIER["third"]
+            + ls.P_TIER["fourth"] + ls.P_TIER["fifth"] + ls.P_JP, "draw": f["draw"], "date": f["date"], "time": f["time"],
+            "close": f"sales close {'12:30' if f['time'] == '13:00' else '20:30'}", "n_draws": f["n_draws"], "tickets": tickets, "p_any": p_real,
+            "p_refund": p_refund, "p_jackpot": k / ls.TOTAL, "ev": k * f["ev"], "forecast": lines,
+            "share_out_now": f["share_out_now"]}
+
+
+def compute(game, k, seed, update, status, goal="win"):
     note = "not updated (--no-update)"
     if update:
         status("Checking vietlott.vn for new draws")
         note = update.refresh(game)
-    return (mega645 if game == "645" else power655)(k, seed, status), note
+    return {"645": mega645, "655": power655, "535": lotto535}[game](k, seed, status, goal), note
 
 
 def when(r):
     day = WEEKDAY[dt.date.fromisoformat(r["date"]).weekday()]
-    return f"{day} {r['date']} at 18:00, sales close 17:45"
+    return f"{day} {r['date']} at {r.get('time', '18:00')}, {r.get('close', 'sales close 17:45')}"
+
+
+def ticket_text(t, sep=" "):
+    if isinstance(t, tuple):
+        mains, special = t
+        return sep.join(f"{x:02d}" for x in mains) + f" | {special:02d}"
+    return sep.join(f"{x:02d}" for x in t)
 
 
 def plain_report(r, k, note):
     cost = k * TICKET
     pct = f"{r['p_any']*100:.1f}%" + ("" if k <= EXACT_LIMIT else f" (estimated from {SIMS:,} simulated draws)")
-    lines = [f"{r['game']}  draw #{r['draw']}  {when(r)}", f"data: {r['n_draws']:,} past draws, {note}"]
+    lines = [f"{r['game']}  draw #{r['draw']}  {when(r)}", f"data: {r['n_draws']:,} past draws, {note}",
+             f"goal: {GOALS[r['goal']][0].lower()} ({GOALS[r['goal']][1]})"]
     lines += [f"forecast: {line}" for line in r["forecast"]]
     lines += ["", f"Your {k} ticket{'s' if k > 1 else ''} ({cost:,} VND):"]
-    lines += [f"  {i:>2d})  " + "  ".join(f"{x:02d}" for x in t) for i, t in enumerate(r["tickets"], 1)]
-    lines += ["", f"chance of winning any prize: {pct}   (chance of winning nothing: {(1-r['p_any'])*100:.1f}%)",
+    lines += [f"  {i:>2d})  " + ticket_text(t, "  ") for i, t in enumerate(r["tickets"], 1)]
+    label = "a real prize (3+ numbers)" if "p_refund" in r else "any prize"
+    lines += ["", f"chance of {label}: {pct}   (chance of winning nothing: {(1-r['p_any'])*100:.1f}%)",
+              f"upper limit for {k} tickets: {min(1, k * r['p_one'])*100:.1f}% ({k} x one ticket's {r['p_one']*100:.2f}%)",
               f"chance of the jackpot: 1 in {1/r['p_jackpot']:,.0f}"]
     if "p_jackpot2" in r:
         lines.append(f"chance of Jackpot 2: 1 in {1/r['p_jackpot2']:,.0f}")
+    if "p_refund" in r:
+        lines.append(f"chance of at least the 10,000 VND refund: {r['p_refund']*100:.1f}%")
     lines.append(f"average value back: {r['ev']:,.0f} VND for {cost:,} VND ({r['ev']/cost:.2f}x the price)")
-    lines += ["", "These numbers are not a prediction: every combination is equally likely. They are spread out for",
-              "more small prizes and avoid numbers other players like, so a jackpot would be shared with fewer people."]
+    why = ("They are spread over every number with the least overlap, for the most chance of a prize."
+           if r["goal"] == "win" else "They avoid numbers other players like, so a jackpot is shared with fewer people.")
+    lines += ["", "These numbers are not a prediction: every combination is equally likely.", why]
     return "\n".join(lines)
 
 
@@ -180,12 +240,17 @@ def styled_report(term, r, k, note, seconds):
     lines += [s("  ⎿  " if i == 0 else "     ", s.grey) + line for i, line in enumerate(r["forecast"] + [note])]
     columns = 1 if k <= 6 else 2 if k <= 20 else 3
     gap = "   " if columns == 1 else " "
-    cells = [s(f"{i:>2d}", s.grey) + ("   " if columns == 1 else "  ") + gap.join(s(f"{x:02d}", s.bold) for x in t)
-             for i, t in enumerate(r["tickets"], 1)]
+    def cell(t):
+        if isinstance(t, tuple):
+            return gap.join(s(f"{x:02d}", s.bold) for x in t[0]) + s(" | ", s.grey) + s(f"{t[1]:02d}", s.accent)
+        return gap.join(s(f"{x:02d}", s.bold) for x in t)
+
+    cells = [s(f"{i:>2d}", s.grey) + ("   " if columns == 1 else "  ") + cell(t) for i, t in enumerate(r["tickets"], 1)]
     height = math.ceil(len(cells) / columns)
     rows = ["    ".join(cells[c * height + row] for c in range(columns) if c * height + row < len(cells))
             for row in range(height)]
-    title = f"Your {k} ticket{'s' if k > 1 else ''} · {cost:,} VND · spread out, avoiding popular numbers"
+    how = "most chance to win, least overlap" if r["goal"] == "win" else "best value, avoiding popular numbers"
+    title = f"Your {k} ticket{'s' if k > 1 else ''} · {cost:,} VND · {how}"
     lines += [""] + term.box(rows, title=title, colour=s.accent)
     filled = round(r["p_any"] * 24)
     bar = s("█" * filled, s.green) + s("░" * (24 - filled), s.grey)
@@ -194,8 +259,12 @@ def styled_report(term, r, k, note, seconds):
     jackpot = f"1 in {1/r['p_jackpot']:,.0f}" + (f"   Jackpot 2: 1 in {1/r['p_jackpot2']:,.0f}" if "p_jackpot2" in r else "")
     verdict = (s("✓ average beats the price, but most draws still pay nothing", s.green) if ratio >= 1
                else s("! below the price: on average this draw loses money", s.yellow))
-    lines += ["", f"  {'Chance of any prize':21s}{chance}  {bar}{about}",
-              f"  {'Chance of nothing':21s}{(1 - r['p_any'])*100:.1f}%",
+    label = "Chance of real prize" if "p_refund" in r else "Chance of any prize"
+    second = (f"  {'Refund or better':21s}{r['p_refund']*100:.1f}%" + s("  a refund needs only the special number", s.dim)
+              if "p_refund" in r else f"  {'Chance of nothing':21s}{(1 - r['p_any'])*100:.1f}%")
+    lines += ["", f"  {label:21s}{chance}  {bar}{about}", second,
+              f"  {'Upper limit':21s}{min(1, k * r['p_one'])*100:.1f}%" + s(f"  ({k} × {r['p_one']*100:.2f}% for one ticket)",
+                                                                           s.dim),
               f"  {'Jackpot':21s}{jackpot}",
               f"  {'Average value back':21s}{r['ev']:,.0f} VND for {cost:,} VND · {ratio:.2f}× the price",
               f"  {verdict}", "",
@@ -206,14 +275,14 @@ def styled_report(term, r, k, note, seconds):
 
 def header(term, overview, full):
     s = term.style
-    jackpots = f"Mega 6/45 {overview['645'][1]/1e9:.1f} tỷ · Power 6/55 {overview['655'][1]/1e9:.1f} tỷ"
+    jackpots = " · ".join(f"{GAME_NAME[g].split()[1]} {overview[g]['jackpot']/1e9:.1f}" for g in GAMES)
     if not full:
-        return term.box([s("✻ ", s.accent) + s("Vietlott Predictor", s.bold) + s(f" · jackpots {jackpots}", s.grey)],
+        return term.box([s("✻ ", s.accent) + s("Vietlott Predictor", s.bold) + s(f" · jackpots in tỷ: {jackpots}", s.grey)],
                         colour=s.accent) + [""]
-    rows = [s("✻ ", s.accent) + s("Welcome to Vietlott Predictor", s.bold), "",
-            s(f"  Mega 6/45   {overview['645'][2]:,} draws · jackpot now {overview['645'][1]/1e9:.1f} tỷ", s.grey),
-            s(f"  Power 6/55  {overview['655'][2]:,} draws · Jackpot 1 now {overview['655'][1]/1e9:.1f} tỷ", s.grey), "",
-            s(f"  cwd: {ROOT}", s.dim)]
+    rows = [s("✻ ", s.accent) + s("Welcome to Vietlott Predictor", s.bold), ""]
+    rows += [s(f"  {GAME_NAME[g]:11s} {overview[g]['draws']:,} draws · jackpot now {overview[g]['jackpot']/1e9:.1f} tỷ",
+               s.grey) for g in GAMES]
+    rows += ["", s(f"  cwd: {ROOT}", s.dim)]
     return term.box(rows, colour=s.accent) + [""]
 
 
@@ -229,18 +298,20 @@ def tests_report(term, result, seconds):
     for out in result["games"].values():
         lines.append(s("⏺ ", s.accent) + s(out["game"], s.bold)
                      + s(f" · tested {out['tested_draws']} · hold-out {out['holdout_draws']}", s.grey))
-        rows = [s(f"{'model':14s}{'hit rate':>9s}{'hold-out':>10s}{'z':>7s}   verdict", s.grey)]
+        rows = [s(f"{'model':23s}{'hit rate':>9s}{'hold-out':>9s}{'score':>9s}   verdict", s.grey)]
         for name, r in bm.ranked(out):
             short = ("beats fair: test on live draws" if r["verdict"].startswith("beats") else
                      "within luck" if r["z_vs_fair"] > 0 else "no better than random")
             colour = s.green if short.startswith("beats") else s.grey if short == "within luck" else ""
-            rows.append(f"{name[:14]:14s}{r['hit_rate_pct']:8.2f}%{r['holdout']['hit_rate_pct']:9.2f}%"
-                        f"{r['z_vs_fair']:+7.2f}   " + s(short, colour))
+            score = "" if r["log_score_vs_fair"] is None else f"{r['log_score_vs_fair'] * 1000:+.1f}"
+            rows.append(f"{name[:23]:23s}{r['hit_rate_pct']:8.2f}%{r['holdout']['hit_rate_pct']:8.2f}%{score:>9s}   "
+                        + s(short, colour))
         lines += term.box(rows, title=f"luck alone catches {out['fair_hit_rate_pct']:.2f}% of the numbers",
                           colour=s.accent) + [""]
     notes = {out["data"] for out in result["games"].values()}
     tried = sum(out["model_versions_tried_on_this_history"] for out in result["games"].values())
-    lines += [s(f"  data: {' / '.join(sorted(notes))} · {seconds:.1f}s", s.dim),
+    lines += [s("  score = log-score per draw vs a random ticket (0 = as good, below 0 = worse)", s.dim),
+              s(f"  data: {' / '.join(sorted(notes))} · {seconds:.1f}s", s.dim),
               s(f"  {tried} model versions tried so far: about 1 in 20 looks good by luck alone", s.dim),
               s("  add a model: copy models/_template.py · details: results/result.json", s.dim),
               ""]
@@ -251,12 +322,13 @@ def session(seed, fetch):
     term = tui.Terminal()
     overview = game_overview()
     lottery_options = []
-    for code in ("645", "655"):
-        date, adv, _ = overview[code]
-        day = WEEKDAY[dt.date.fromisoformat(date).weekday()][:3]
-        lottery_options.append((GAME_NAME[code], f"next draw {day} {date[8:]}/{date[5:7]} · jackpot {adv/1e9:.1f} tỷ"))
+    for code in GAMES:
+        o = overview[code]
+        day = WEEKDAY[dt.date.fromisoformat(o["date"]).weekday()][:3]
+        lottery_options.append((GAME_NAME[code], f"next draw {day} {o['date'][8:]}/{o['date'][5:7]} {o['time']}"
+                                                 f" · jackpot {o['jackpot']/1e9:.1f} tỷ"))
     notes = {}
-    state, game, trail, first = "home", None, [], True
+    state, game, goal, trail, first = "home", None, "win", [], True
 
     def fresh(*extra):
         nonlocal first
@@ -279,7 +351,7 @@ def session(seed, fetch):
                 fresh()
                 choice = term.menu("What would you like to do?",
                                    [("Get tickets", "numbers for the next draw, with their odds and value"),
-                                    ("Test models", "every model in models/ on every past draw, both games"),
+                                    ("Test models", "every model on every past draw, all three games"),
                                     ("Quit", "")], "↑/↓ to move · Enter to choose · Esc to quit")
                 state = {0: "lottery", 1: "tests"}.get(choice, "quit")
             elif state == "lottery":
@@ -289,21 +361,35 @@ def session(seed, fetch):
                 if idx is None:
                     state = "home"
                     continue
-                game = ("645", "655")[idx]
+                game = GAMES[idx]
                 trail.append(answer("Lottery", GAME_NAME[game]))
+                state = "goal" if game != "535" else "tickets"
+                if game == "535":
+                    goal = "win"
+                    trail.append(answer("Goal", GOALS["win"][0]))
+            elif state == "goal":
+                fresh()
+                idx = term.menu("What matters most to you?", [GOALS["win"], GOALS["value"]],
+                                "↑/↓ to move · Enter to choose · Esc to go back")
+                if idx is None:
+                    trail = trail[:1]
+                    state = "lottery"
+                    continue
+                goal = ("win", "value")[idx]
+                trail.append(answer("Goal", GOALS[goal][0]))
                 state = "tickets"
             elif state == "tickets":
                 fresh()
                 k = term.ask_number("How many tickets will you buy?", 10, 1, MAX_TICKETS,
                                     f"1-{MAX_TICKETS} tickets, {TICKET:,} VND each · Enter to confirm · Esc to go back")
                 if k is None:
-                    trail = trail[:1]
-                    state = "lottery"
+                    trail = trail[:2] if game != "535" else trail[:1]
+                    state = "goal" if game != "535" else "lottery"
                     continue
                 fresh(answer("Tickets", str(k)))
                 fetch_now = fetch and game not in notes
                 (result, note), seconds = term.spin(
-                    lambda status: compute(game, k, seed, fetch_now, status), "Starting")
+                    lambda status: compute(game, k, seed, fetch_now, status, goal), "Starting")
                 if fetch_now:
                     notes[game] = note
                 elif fetch:
@@ -319,7 +405,7 @@ def session(seed, fetch):
             elif state == "tests":
                 trail = [answer("Test", "models")]
                 fresh()
-                games = ("645", "655")
+                games = GAMES
                 todo = tuple(g for g in games if g not in notes) if fetch else ()
                 result, seconds = term.spin(lambda status: bm.run(
                     games, seed=seed, fetch=bool(todo), status=status), "Starting")
@@ -341,11 +427,12 @@ def main():
     ap.add_argument("--tickets", type=int)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--no-update", action="store_true")
+    ap.add_argument("--goal", choices=sorted(GOALS), default="win")
     args = ap.parse_args()
     if args.game and args.tickets:
         if not 1 <= args.tickets <= MAX_TICKETS:
             raise SystemExit(f"--tickets must be 1 to {MAX_TICKETS}")
-        result, note = compute(args.game, args.tickets, args.seed, not args.no_update, lambda text: None)
+        result, note = compute(args.game, args.tickets, args.seed, not args.no_update, lambda text: None, args.goal)
         text = plain_report(result, args.tickets, note)
         print(text)
         save(text)
