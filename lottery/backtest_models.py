@@ -20,6 +20,7 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+import aligner
 import power645_study as s
 import update
 
@@ -27,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 RESULT = ROOT / "results" / "result.json"
 RUNS_LOG = ROOT / "results" / "backtest_runs.jsonl"
+ALIGN_DIR = ROOT / "results"
 K = 6
 GAMES = {"645": {"name": "Mega 6/45", "balls": 45, "k": 6, "prize": {3: 30_000, 4: 300_000, 5: 10_000_000}},
          "655": {"name": "Power 6/55", "balls": 55, "k": 6, "prize": {3: 50_000, 4: 500_000, 5: 40_000_000}},
@@ -103,17 +105,20 @@ def log_gain(chances, drawn, n_balls, k):
 
 def run_model(mod, draws, n_balls, start, seed, k=K):
     rng = random.Random(seed)
-    hits, gains = [], []
+    hits, gains, tickets = [], [], []
     for t in range(start, len(draws)):
         scores = [float(v) for v in mod.predict(draws[:t], n_balls)]
         if len(scores) != n_balls:
             raise ValueError(f"predict() must return {n_balls} scores, got {len(scores)}")
         order = sorted(range(1, n_balls + 1), key=lambda i: (-scores[i - 1], rng.random()))
         drawn = set(draws[t])
+        tickets.append(sorted(order[:k]))
         hits.append(len(set(order[:k]) & drawn))
         chances = to_chances(scores, k)
         gains.append(log_gain(chances, drawn, n_balls, k) if chances else None)
-    return hits, gains
+    scores = [float(v) for v in mod.predict(draws, n_balls)]
+    nxt = sorted(sorted(range(1, n_balls + 1), key=lambda i: (-scores[i - 1], rng.random()))[:k])
+    return hits, gains, tickets, nxt
 
 
 def summarise(hits, gains, n_balls, prize, k=K):
@@ -153,11 +158,14 @@ def prepare(code, fakes_n, seed):
     return {"draws": draws, "ids": ids, "fakes": fakes}
 
 
-def assemble(code, prep, models, runs, start, holdout):
+def assemble(code, prep, models, runs, start, holdout, aligned=None, aligner_sha=None):
     game = GAMES[code]
     n_balls, prize, ids, k = game["balls"], game["prize"], prep["ids"], game["k"]
     split = len(prep["draws"]) - holdout - start
-    tried = versions_tried(code, {name: h for name, (_, h) in models.items()})
+    current = {name: h for name, (_, h) in models.items()}
+    if aligned:
+        current["aligned_vote"] = aligner_sha
+    tried = versions_tried(code, current)
     out = {"game": game["name"], "tested_draws": f"#{ids[start]}..#{ids[-1]}",
            "holdout_draws": f"#{ids[-holdout]}..#{ids[-1]}", "fair_hit_rate_pct": 100 * k / n_balls,
            "model_versions_tried_on_this_history": tried,
@@ -166,14 +174,26 @@ def assemble(code, prep, models, runs, start, holdout):
            "models": {}}
     p_values = {}
     for name, (_, digest) in models.items():
-        hits, gains = runs[(code, name, 0)]
+        hits, gains = runs[(code, name, 0)][:2]
         res = summarise(hits, gains, n_balls, prize, k)
         res["holdout"] = summarise(hits[split:], gains[split:], n_balls, prize, k)
-        res["fake_lotteries_z"] = [summarise(*runs[(code, name, h)], n_balls, prize, k)["z_vs_fair"]
+        res["fake_lotteries_z"] = [summarise(*runs[(code, name, h)][:2], n_balls, prize, k)["z_vs_fair"]
                                    for h in range(1, len(prep["fakes"]) + 1)]
         res["file_sha"] = digest
         out["models"][name] = res
         p_values[name] = res["p_luck"]
+    if aligned:
+        hits = aligned[0]["hits"]
+        none = [None] * len(hits)
+        res = summarise(hits, none, n_balls, prize, k)
+        res["holdout"] = summarise(hits[split:], none[split:], n_balls, prize, k)
+        res["fake_lotteries_z"] = [summarise(a["hits"], [None] * len(a["hits"]), n_balls, prize, k)["z_vs_fair"]
+                                   for a in aligned[1:]]
+        res["file_sha"] = aligner_sha
+        res["next_ticket"] = aligned[0]["next"]
+        res["weights_now"] = dict(sorted(aligned[0]["weights"].items(), key=lambda kv: -kv[1]))
+        out["models"]["aligned_vote"] = res
+        p_values["aligned_vote"] = res["p_luck"]
     adjusted = dict(zip(p_values, s.holm(list(p_values.values()))))
     for name, res in out["models"].items():
         res["p_luck_after_holm"] = adjusted[name]
@@ -207,9 +227,24 @@ def run(games, names=None, start=50, holdout=300, fakes=3, seed=2026, fetch=True
         for done, fut in enumerate(as_completed(futures), 1):
             runs[futures[fut]] = fut.result()
             status(f"Testing {len(models)} models on {len(games)} game(s): {done} of {len(futures)} runs done")
+    aligner_sha = hashlib.sha256(Path(aligner.__file__).read_bytes()).hexdigest()[:12]
     for code in games:
-        out = assemble(code, prepared[code], models, runs, start, holdout)
+        prep, n_balls, k = prepared[code], GAMES[code]["balls"], GAMES[code]["k"]
+        aligned = [aligner.align({name: runs[(code, name, h)][2] for name in models}, history[start:], n_balls, k,
+                                 next_tickets={name: runs[(code, name, h)][3] for name in models} if h == 0 else None,
+                                 seed=seed)
+                   for h, history in enumerate([prep["draws"], *prep["fakes"]])]
+        out = assemble(code, prep, models, runs, start, holdout, aligned, aligner_sha)
         out["data"] = notes[code]
+        ALIGN_DIR.mkdir(parents=True, exist_ok=True)
+        with (ALIGN_DIR / f"aligned_{code}.jsonl").open("w") as fh:
+            for j, step in enumerate(aligned[0]["steps"]):
+                fh.write(json.dumps({"draw": prep["ids"][start + j], "ticket": step["ticket"], "hits": step["hits"],
+                                     "leaders": [[n, round(w, 4)] for n, w in step["leaders"]]}) + "\n")
+        if fetch:
+            path, fresh = aligner.freeze(code, prep["ids"][-1] + 1, aligned[0]["next"], aligned[0]["weights"],
+                                         prep["ids"][-1], name=GAMES[code]["name"])
+            out["aligned_frozen"] = {"file": str(path), "new": fresh}
         result["games"][code] = out
     RESULT.parent.mkdir(exist_ok=True)
     RESULT.write_text(json.dumps(result, indent=1))
@@ -237,6 +272,12 @@ def summary_lines(result):
                          f" {r['z_vs_fair']:+6.2f} {r['p_luck_after_holm']:7.3f}"
                          f" {min(r['fake_lotteries_z']):+6.2f}..{max(r['fake_lotteries_z']):+5.2f} {score:>10s}"
                          f"  {r['verdict']}")
+        vote = out["models"].get("aligned_vote")
+        if vote:
+            frozen = out.get("aligned_frozen")
+            where = "" if not frozen else (f"; frozen to {Path(frozen['file']).name}" if frozen["new"]
+                                           else f"; already frozen in {Path(frozen['file']).name}")
+            lines.append(f"  aligned vote for the next draw: {' '.join(f'{x:02d}' for x in vote['next_ticket'])}{where}")
         lines += [f"  model versions tried on this history: {out['model_versions_tried_on_this_history']};"
                   " log score = milli-nats per draw vs a random ticket, 0 = as good, below 0 = worse", ""]
     lines.append(f"Full detail: {RESULT}")

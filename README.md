@@ -90,8 +90,26 @@ Test every model in `models/` on every past draw of all three games, using only 
 python3 lottery/backtest_models.py
 ```
 
+The same run also scores the **aligned vote**, which works through the history one draw at a time:
+1. From draw 51, every model makes its ticket from earlier draws only.
+2. The 6 numbers with the most weighted votes across all the models' tickets make the aligned ticket; at the start,
+   every model's weight is equal.
+3. Once the draw is known, each model's weight is multiplied by e^(0.1 × (numbers it caught − luck)), so one extra
+   number caught is worth about 10% more trust.
+4. This repeats up to the latest draw, and the final weights vote on the next draw.
+
+Every step goes to `results/aligned_<game>.jsonl`: the draw, the aligned ticket, how many it caught, and the three most
+trusted models. When the run has fetched fresh draws, the pick for the next draw is frozen with a fingerprint to
+`predictions/aligned_<game>_draw_<number>.json`; an existing freeze is never overwritten.
+
 To add a model, copy `models/_template.py` to a new name and change `predict()`. A model only counts as real if it beats
 a random ticket on all draws, on the hold-out of the last 300 draws, and then on new live draws.
+
+All the unit tests (the engine and the aligned vote):
+
+```bash
+python3 -m unittest discover tests
+```
 
 Before a Mega 6/45 draw, sales close 17:45. Choose tickets, then freeze the prediction:
 

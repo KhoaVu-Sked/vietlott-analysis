@@ -1,0 +1,38 @@
+{
+ "game": "Lotto 5/35",
+ "draw": 916,
+ "frozen_at": "2026-09-29T15:44:52+07:00",
+ "history_last_draw": 915,
+ "step": 0.1,
+ "ticket": [
+  10,
+  20,
+  22,
+  28,
+  34
+ ],
+ "weights": {
+  "markov_chain": 0.159766,
+  "engine_ensemble": 0.144562,
+  "bayes_average": 0.144562,
+  "overdue": 0.096903,
+  "frequency": 0.079337,
+  "hierarchical_bayes": 0.079337,
+  "bayes_average_forgetful": 0.071787,
+  "frames_contrarian_10": 0.058774,
+  "frames_vote": 0.04812,
+  "frames_follow_last": 0.026409,
+  "hot30": 0.023896,
+  "recent_bayes": 0.023896,
+  "naive_bayes": 0.014494,
+  "cold_weighted": 0.007197,
+  "logistic_regression": 0.007197,
+  "ewma_hot": 0.005893,
+  "fair": 0.004365,
+  "repeat_last": 0.001961,
+  "unique_hash": 0.000881,
+  "frames_follow_10": 0.000396,
+  "gap_hazard": 0.000265
+ },
+ "sha256": "352d87f2630f099083bdf477d5b2fc92a5113668b087c9b6be06c18c5dc45485"
+}

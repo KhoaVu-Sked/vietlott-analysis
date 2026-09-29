@@ -1,0 +1,4 @@
+Aligned vote for Lotto 5/35 draw #916, frozen 2026-09-29T15:44:52+07:00 from draws up to #915
+  ticket: 10 20 22 28 34 (main numbers; the special number is not voted)
+  most trusted now: markov_chain 16.0%, engine_ensemble 14.5%, bayes_average 14.5%
+  sha256: 352d87f2630f099083bdf477d5b2fc92a5113668b087c9b6be06c18c5dc45485
