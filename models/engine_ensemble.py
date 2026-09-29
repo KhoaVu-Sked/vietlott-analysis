@@ -1,6 +1,7 @@
-"""The numpy engine as a harness model: the five-term ensemble (Bayes, Markov, gap, entropy, overlap) with weights
-fitted by conditional logit on the draws so far, refitted every 100 draws, scoring 200,000 sampled candidates and
-returning the best one. See engine/ and docs/superpowers/specs/2026-09-28-lottery-engine-design.md."""
+"""The numpy engine as a harness model: the five-term ensemble (Bayes, Markov, gap combinations against their
+history, entropy, overlap) with weights fitted by conditional logit on the draws so far, refitted every 100 draws,
+scoring 200,000 sampled candidates and returning the best one. See engine/ and
+docs/superpowers/specs/2026-09-28-lottery-engine-design.md."""
 
 import sys
 from pathlib import Path

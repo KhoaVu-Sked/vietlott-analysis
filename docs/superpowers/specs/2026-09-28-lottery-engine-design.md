@@ -72,9 +72,15 @@ Each term is centred so that 0 is the value a fair lottery gives; the weights th
   Term = sum over i in T of log(N p_i).
 - Markov (`markov.py`): M_ij = (count of j at s given i at s-1, plus eps) / row total. Given the last draw D,
   q_j = mean over i in D of M_ij. Term = sum over j in T of log(N q_j). With no last draw the term is 0.
-- Gap (`gaps.py`): the k+1 gaps g_0..g_k of the sorted ticket, G = N - k, q = g / G.
-  Term = -KL(q || uniform over k+1) = -sum over q_i > 0 of q_i log(q_i (k+1)); 0 for an even spread, negative when
-  clustered. Gap variance and min/max ratio are returned as diagnostics only.
+- Gap (`gaps.py`), changed 2026-09-29 at Khoa's request: real draws are rarely evenly spaced, so the term compares
+  the ticket's gap combination with history instead of rewarding even spacing. The k-1 in-between gaps are sorted
+  into next to (0), close (1-3), medium (4-8) and wide (9+); the counts per kind are the combination c. f(c) is its
+  exact share under a fair machine, counted with generating polynomials; after t draws with n_t(c) of combination c,
+  the term is log((n_t(c) + 20) / (t f(c) + 20)), a Gamma-Poisson estimate that shrinks every combination by the same
+  20 pseudo-counts, so a rare combination seen once barely moves it (a first version shrank by 50 f(c), which let
+  one-off rare combinations reach +4 and made the engine pick runs like 38 39 40 41 42); 0 while history matches a
+  fair machine. It is snapshotted before each draw like the Bayes and Markov terms. The old evenness score
+  KL(q || uniform over k+1), the gap variance and the min/max ratio are diagnostics only.
 - Entropy (`entropy.py`): Shannon entropy over bins of ten (ceil(N/10) bins), residues mod 3, residues mod 5 and last
   digit, each divided by log(min(k, bins)) and averaged into a score in [0, 1]. Term = log(max(score, 1e-9)).
 - Overlap (`overlap.py`): o = |T ∩ D_last|. Term = log(C(k, o) C(N-k, k-o) / C(N, k)); 0 with no last draw.

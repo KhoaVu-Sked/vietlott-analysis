@@ -15,7 +15,7 @@ __all__ = ["Engine", "Fit", "TERMS", "candidates", "diagnostics"]
 
 class Engine:
     """The five-term ensemble over a draw history. State is incremental: each draw updates
-    the Bayes and Markov terms and stores the per-number log terms as they stood before it, so a walk-forward fit
+    the Bayes, Markov and gap terms and stores their log terms as they stood before it, so a walk-forward fit
     is one pass. A ticket's features are $(\\text{bayes}, \\text{markov}, \\text{gap}, \\text{entropy},
     \\text{overlap})$ and its score is $w \\cdot f$ with $w$ from the conditional-logit fit in scorer.py."""
 
@@ -26,7 +26,7 @@ class Engine:
         self.gaps = SpatialGapAnalyzer(n_balls, k)
         self.entropy = InformationEntropyScorer(n_balls, k)
         self.overlap_table = overlap.log_probabilities(n_balls, k)
-        self.draws, self.snap_bayes, self.snap_markov = [], [], []
+        self.draws, self.snap_bayes, self.snap_markov, self.snap_gaps = [], [], [], []
         self.scorer = JointEnsembleScorer()
         self.fit_result = None
 
@@ -40,8 +40,10 @@ class Engine:
             raise ValueError(f"draw {list(draw)!r} is not {self.k} distinct numbers in 1..{self.n}")
         self.snap_bayes.append(self.bayes.log_terms())
         self.snap_markov.append(self.markov.log_terms())
+        self.snap_gaps.append(self.gaps.log_terms())
         self.bayes.update(d)
         self.markov.update(d)
+        self.gaps.update(d)
         self.draws.append(d)
 
     def extend(self, draws):
@@ -49,16 +51,18 @@ class Engine:
             self.add(d)
 
     def static_terms(self, cands):
-        return np.stack([self.gaps.term(cands), self.entropy.term(cands)], axis=1)
+        return self.gaps.kinds(cands), self.entropy.term(cands)
 
     def features(self, cands, static=None, at=None):
         if at is None:
-            b, m, last = self.bayes.log_terms(), self.markov.log_terms(), (self.draws[-1] if self.draws else None)
+            b, m, g = self.bayes.log_terms(), self.markov.log_terms(), self.gaps.log_terms()
+            last = self.draws[-1] if self.draws else None
         else:
-            b, m, last = self.snap_bayes[at], self.snap_markov[at], (self.draws[at - 1] if at > 0 else None)
+            b, m, g = self.snap_bayes[at], self.snap_markov[at], self.snap_gaps[at]
+            last = self.draws[at - 1] if at > 0 else None
         idx = cands.astype(np.int64) - 1
-        sta = self.static_terms(cands) if static is None else static
-        return np.column_stack([b[idx].sum(axis=1), m[idx].sum(axis=1), sta,
+        codes, ent = self.static_terms(cands) if static is None else static
+        return np.column_stack([b[idx].sum(axis=1), m[idx].sum(axis=1), g[codes], ent,
                                 overlap.term(cands, last, self.overlap_table)])
 
     def fit(self, samples=1000, start=10, prior_sd=1.0):

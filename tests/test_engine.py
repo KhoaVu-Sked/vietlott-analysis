@@ -73,14 +73,46 @@ class TestStaticTerms(unittest.TestCase):
         self.assertEqual(overlap.term(cands, [1, 2, 3, 4, 5, 6], table).tolist(), [table[6], table[3], table[0]])
         self.assertEqual(overlap.term(cands, None, table).tolist(), [0.0, 0.0, 0.0])
 
-    def test_gap_term_is_zero_for_even_spread_and_lower_for_a_run(self):
+    def test_gap_kinds_classify_the_in_between_gaps(self):
+        g = gaps.SpatialGapAnalyzer(45, 6)
+        cands = np.array([[1, 2, 3, 4, 5, 6], [1, 5, 9, 20, 30, 40], [6, 12, 18, 25, 34, 41]], dtype=np.int16)
+        self.assertEqual(g.kinds(cands).tolist(), [g.code(5, 0, 0, 0), g.code(0, 2, 0, 3), g.code(0, 0, 5, 0)])
+
+    def test_fair_gap_shares_match_counting_every_ticket(self):
+        import itertools
+        for n, k in ((20, 5), (16, 6), (12, 4)):
+            g = gaps.SpatialGapAnalyzer(n, k)
+            rows = np.array(list(itertools.combinations(range(1, n + 1), k)), dtype=np.int16)
+            counted = np.bincount(g.kinds(rows), minlength=len(g.fair)) / len(rows)
+            self.assertTrue(np.allclose(g.fair, counted, rtol=0, atol=1e-15), (n, k))
+        for n, k in ((45, 6), (55, 6), (35, 5)):
+            self.assertAlmostEqual(float(gaps.SpatialGapAnalyzer(n, k).fair.sum()), 1.0, places=12)
+
+    def test_gap_term_starts_fair_and_learns_from_draws(self):
+        g = gaps.SpatialGapAnalyzer(45, 6)
+        self.assertTrue(np.allclose(g.log_terms(), 0.0))
+        g.update([1, 5, 9, 20, 30, 40])
+        seen, other = g.code(0, 2, 0, 3), g.code(0, 2, 2, 1)
+        f, fo = float(g.fair[seen]), float(g.fair[other])
+        self.assertAlmostEqual(float(g.log_terms()[seen]), math.log((1 + 20) / (f + 20)), places=12)
+        self.assertAlmostEqual(float(g.log_terms()[other]), math.log(20 / (fo + 20)), places=12)
+
+    def test_rare_gap_combinations_cannot_swing_the_term(self):
+        g = gaps.SpatialGapAnalyzer(45, 6)
+        for d in fair_history(45, 6, 1500, 15):
+            g.update(d)
+        self.assertLess(float(np.abs(g.log_terms()).max()), 0.5)
+        rare = int(np.argmin(np.where(g.fair > 0, g.fair, 1.0)))
+        g.seen[rare] += 1
+        self.assertLess(float(g.log_terms()[rare]), math.log(1 + 2 / 20))
+
+    def test_gap_diagnostics_keep_the_old_evenness_score(self):
         g = gaps.SpatialGapAnalyzer(13, 6)
         cands = np.array([[2, 4, 6, 8, 10, 12], [1, 2, 3, 4, 5, 6]], dtype=np.int16)
-        term = g.term(cands)
-        self.assertAlmostEqual(float(term[0]), 0.0, places=12)
-        self.assertLess(float(term[1]), float(term[0]))
         self.assertEqual(g.gaps(cands[:1]).tolist(), [[1, 1, 1, 1, 1, 1, 1]])
         diag = g.diagnostics(cands)
+        self.assertAlmostEqual(float(diag["unevenness"][0]), 0.0, places=12)
+        self.assertGreater(float(diag["unevenness"][1]), 0.0)
         self.assertEqual(float(diag["variance"][0]), 0.0)
         self.assertEqual(float(diag["min_max_ratio"][1]), 0.0)
 
@@ -227,13 +259,26 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(feats.shape, (50, 5))
         pb, pm = eng.bayes.log_terms(), eng.markov.log_terms()
         last, table = set(h[-1]), overlap.log_probabilities(45, 6)
+        fair = gaps.SpatialGapAnalyzer(45, 6).fair
+
+        def kind(row):
+            n = [0, 0, 0, 0]
+            for a, b in zip(row, row[1:]):
+                v = b - a - 1
+                n[0 if v == 0 else 1 if v <= 3 else 2 if v <= 8 else 3] += 1
+            return n[0] * 216 + n[1] * 36 + n[2] * 6 + n[3]
+
+        seen = [kind(d) for d in h]
         for row, f in zip(cands.tolist(), feats):
             self.assertAlmostEqual(f[0], sum(pb[x - 1] for x in row), places=10)
             self.assertAlmostEqual(f[1], sum(pm[x - 1] for x in row), places=10)
-            g = [row[0] - 1] + [b - a - 1 for a, b in zip(row, row[1:])] + [45 - row[-1]]
-            self.assertAlmostEqual(f[2], -sum(v / 39 * math.log(v / 39 * 7) for v in g if v > 0), places=10)
+            c = kind(row)
+            ratio = (seen.count(c) + 20) / (len(h) * fair[c] + 20)
+            self.assertAlmostEqual(f[2], math.log(ratio), places=10)
             self.assertAlmostEqual(f[4], table[len(last & set(row))], places=10)
-        self.assertTrue(np.allclose(feats[:, 2:4], eng.static_terms(cands)))
+        codes, ent = eng.static_terms(cands)
+        self.assertEqual(codes.tolist(), [kind(r) for r in cands.tolist()])
+        self.assertTrue(np.allclose(feats[:, 3], ent))
 
     def test_extend_is_incremental_and_snapshots_are_pre_draw(self):
         h = fair_history(45, 6, 60, 6)
@@ -247,8 +292,11 @@ class TestEngine(unittest.TestCase):
         fresh.extend(h[:25])
         self.assertTrue(np.allclose(eng.snap_bayes[25], fresh.bayes.log_terms()))
         self.assertTrue(np.allclose(eng.snap_markov[25], fresh.markov.log_terms()))
-        self.assertTrue(np.allclose(eng.features(np.array([h[30]], dtype=np.int16), at=25)[0, :2],
-                                    fresh.features(np.array([h[30]], dtype=np.int16))[0, :2]))
+        self.assertEqual(len(eng.snap_gaps), 60)
+        self.assertTrue(np.allclose(eng.snap_gaps[0], 0.0))
+        self.assertTrue(np.allclose(eng.snap_gaps[25], fresh.gaps.log_terms()))
+        self.assertTrue(np.allclose(eng.features(np.array([h[30]], dtype=np.int16), at=25)[0, :3],
+                                    fresh.features(np.array([h[30]], dtype=np.int16))[0, :3]))
 
     def test_fit_on_fair_is_within_noise_and_rigged_shows_bayes(self):
         eng = Engine(45, 6)
@@ -262,6 +310,19 @@ class TestEngine(unittest.TestCase):
         rig = Engine(45, 6)
         rig.extend(rigged_history(45, 6, 1500, 7))
         self.assertGreater(float(rig.fit().z[0]), 5, rig.fit_result.as_dict())
+
+    def test_fit_finds_a_machine_that_favours_neighbours(self):
+        r = random.Random(14)
+        h = []
+        for _ in range(1500):
+            want = r.random() < 0.5
+            d = sorted(r.sample(range(1, 46), 6))
+            while want and sum(b - a == 1 for a, b in zip(d, d[1:])) < 2:
+                d = sorted(r.sample(range(1, 46), 6))
+            h.append(d)
+        eng = Engine(45, 6)
+        eng.extend(h)
+        self.assertGreater(float(eng.fit().z[2]), 3, eng.fit_result.as_dict())
 
     def test_fit_needs_history(self):
         eng = Engine(45, 6)

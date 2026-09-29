@@ -141,7 +141,7 @@ Rules! ch. 10-11 (0 = as good as a random ticket, below 0 = worse).
 | `frames_vote.py` | the numbers most of the eight lenses agree on | |
 | `cold_weighted.py` | least-drawn numbers since the first draw, trusted as much as a learned weight from 0 to 100 says: the weight rises when its 12 coldest numbers come up more than chance and falls when they don't; the last draw's numbers go last and the ticket takes the most typical shape (exact odds of its sum, odd/even, low/high, neighbours and bands) | the "cold numbers, a learned weight, don't repeat the last draw, spread beats a run" ideas in one model; `train_cold_weight.py` trains its settings |
 | `unique_hash.py` | every universe has its own hash, so a combination already drawn never comes again and the rest share its chance equally: a number gains 1 in 8.1 million for each draw it is behind | the "each draw is a unique hash" idea; `unique_hash_study.py` tests it |
-| `engine_ensemble.py` | the numpy engine: Bayes (decayed Dirichlet counts), Markov transitions, gap spread, four-way entropy and overlap with the last draw, combined with weights fitted by conditional logit on the draws so far and refitted every 100 draws; scores 200,000 sampled tickets and plays the best | the seven-module engine specification, with the weights fitted instead of hand-set |
+| `engine_ensemble.py` | the numpy engine: Bayes (decayed Dirichlet counts), Markov transitions, how often a gap combination has come up against a fair machine, four-way entropy and overlap with the last draw, combined with weights fitted by conditional logit on the draws so far and refitted every 100 draws; scores 200,000 sampled tickets and plays the best | the seven-module engine specification, with the weights fitted instead of hand-set |
 
 A spread shape comes up far more often than "six in a row", but only because it holds far more tickets: any single
 ticket, spread or in a row, has the same 1 in 8,145,060 chance, and the last draw's numbers come back at exactly the
@@ -159,8 +159,10 @@ per-number bias still consistent with 1,567 draws, even a perfect model would ca
 ## The engine
 
 `engine/` is a vectorized scorer. Every ticket gets five terms: how much the decayed counts favour its numbers
-(Bayes), how often its numbers followed the last draw (Markov), how evenly it is spread (gap), how varied its
-decades, residues and last digits are (entropy), and how many numbers it shares with the last draw (overlap). The
+(Bayes), how often its numbers followed the last draw (Markov), how often its gap combination has come up in past
+draws compared with a fair machine (gap: its 5 in-between gaps counted as next to, close 1-3, medium 4-8 or wide 9+),
+how varied its decades, residues and last digits are (entropy), and how many numbers it shares with the last draw
+(overlap). The
 composite is a weighted sum. The weights are not chosen by hand: each past draw is treated as the one ticket that
 came up against 1,000 random tickets that did not, and the weights that best tell them apart are fitted with an error
 bar. On a fair lottery every weight sits at 0 ± its error bar, which is what the fake lotteries in `engine_study.py`
