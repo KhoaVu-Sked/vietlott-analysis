@@ -1,0 +1,305 @@
+{
+ "draw": 1568,
+ "date": "2026-09-27",
+ "result": [
+  2,
+  4,
+  13,
+  25,
+  31,
+  39
+ ],
+ "integrity": {
+  "pre_registered": true,
+  "history_unchanged": true,
+  "predictions_reproduce": true,
+  "code_unchanged": true
+ },
+ "tickets": {
+  "10 tickets, most chance to win": {
+   "won": 30000,
+   "spent": 100000,
+   "best": 3,
+   "matches": [
+    0,
+    1,
+    3,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    2
+   ],
+   "p_any": 0.23006926898021623
+  },
+  "5 tickets, most chance to win": {
+   "won": 0,
+   "spent": 50000,
+   "best": 2,
+   "matches": [
+    1,
+    2,
+    2,
+    0,
+    0
+   ],
+   "p_any": 0.11867929763562209
+  },
+  "10 recommended tickets": {
+   "won": 0,
+   "spent": 100000,
+   "best": 2,
+   "matches": [
+    0,
+    2,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    2,
+    2
+   ],
+   "p_any": 0.22574578947239185
+  },
+  "5 recommended tickets": {
+   "won": 0,
+   "spent": 50000,
+   "best": 2,
+   "matches": [
+    2,
+    1,
+    2,
+    1,
+    0
+   ],
+   "p_any": 0.11867929763562209
+  },
+  "Bao 7 on the least-picked numbers": {
+   "won": 0,
+   "spent": 70000,
+   "best": 1,
+   "matches": [
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1
+   ],
+   "p_any": 0.03936987572835559
+  }
+ },
+ "models": {
+  "uniform (fair lottery)": {
+   "gain": -2.3447910280083306e-13,
+   "hits": 0,
+   "rank": 23.0,
+   "mass": 0.7999997999999999,
+   "flat": true,
+   "percentile": 1.0,
+   "record_better_share": 0.0,
+   "record_mean_gain": -3.4761936918724903e-15,
+   "record_hits": 0.786923076923077
+  },
+  "frequency / hot all-time (no pooling)": {
+   "gain": -0.004891858097536783,
+   "hits": 0,
+   "rank": 22.333333333333332,
+   "mass": 0.800254,
+   "flat": false,
+   "percentile": 0.54,
+   "record_better_share": 0.4469230769230769,
+   "record_mean_gain": -0.0305408522458251,
+   "record_hits": 0.7861538461538462
+  },
+  "hierarchical Beta-Binomial (partial pooling)": {
+   "gain": -1.1538587685322454e-07,
+   "hits": 0,
+   "rank": 23.0,
+   "mass": 0.8,
+   "flat": true,
+   "percentile": 0.49923076923076926,
+   "record_better_share": 0.4823076923076923,
+   "record_mean_gain": -0.000335716484330161,
+   "record_hits": 0.7961538461538461
+  },
+  "hot last 30 draws": {
+   "gain": -0.7840360218359024,
+   "hits": 0,
+   "rank": 24.0,
+   "mass": 0.7466667,
+   "flat": false,
+   "percentile": 0.3861538461538462,
+   "record_better_share": 0.32461538461538464,
+   "record_mean_gain": -0.5257163580304921,
+   "record_hits": 0.7746153846153846
+  },
+  "exponentially weighted hot": {
+   "gain": -0.9180732014070152,
+   "hits": 0,
+   "rank": 27.166666666666668,
+   "mass": 0.7179103,
+   "flat": false,
+   "percentile": 0.24153846153846154,
+   "record_better_share": 0.3630769230769231,
+   "record_mean_gain": -0.3441816247833043,
+   "record_hits": 0.7823076923076923
+  },
+  "overdue / cold (gambler's fallacy)": {
+   "gain": -3.4950758243593114,
+   "hits": 0,
+   "rank": 22.833333333333332,
+   "mass": 0.6614174,
+   "flat": false,
+   "percentile": 0.4469230769230769,
+   "record_better_share": 0.11,
+   "record_mean_gain": -3.237951072831561,
+   "record_hits": 0.7892307692307692
+  },
+  "Markov: follows last draw": {
+   "gain": -0.028391329218305117,
+   "hits": 1,
+   "rank": 24.0,
+   "mass": 0.7999312000000001,
+   "flat": false,
+   "percentile": 0.5069230769230769,
+   "record_better_share": 0.45,
+   "record_mean_gain": -0.04892230138117201,
+   "record_hits": 0.806923076923077
+  },
+  "logistic regression": {
+   "gain": 0.13901481715980069,
+   "hits": 1,
+   "rank": 16.333333333333332,
+   "mass": 0.8169903000000001,
+   "flat": false,
+   "percentile": 0.8753846153846154,
+   "record_better_share": 0.47307692307692306,
+   "record_mean_gain": -0.010260570784508332,
+   "record_hits": 0.7892307692307692
+  },
+  "naive Bayes": {
+   "gain": 0.19780116016256244,
+   "hits": 1,
+   "rank": 16.0,
+   "mass": 0.8237462,
+   "flat": false,
+   "percentile": 0.9076923076923077,
+   "record_better_share": 0.4530769230769231,
+   "record_mean_gain": -0.028440904449217864,
+   "record_hits": 0.7623076923076924
+  }
+ },
+ "tags": {
+  "hot": {
+   "drawn": 1,
+   "pool": 11,
+   "expected": 1.4666666666666666
+  },
+  "cold": {
+   "drawn": 1,
+   "pool": 12,
+   "expected": 1.6
+  },
+  "overdue": {
+   "drawn": 0,
+   "pool": 7,
+   "expected": 0.9333333333333333
+  }
+ },
+ "patterns": {
+  "sum": {
+   "value": 114,
+   "exact_p": 0.009687712552148174,
+   "past_share": 0.009578544061302681,
+   "mean": 137.99999999999994,
+   "p_two": 0.44238569144978673
+  },
+  "odd": {
+   "value": 4,
+   "exact_p": 0.25113442994895063,
+   "past_share": 0.23499361430395913,
+   "mean": 3.0666666666666664,
+   "p_two": 0.7088296464359991
+  },
+  "low": {
+   "value": 3,
+   "exact_p": 0.33484590659860086,
+   "past_share": 0.33780332056194123,
+   "mean": 2.933333333333333,
+   "p_two": 1.0
+  },
+  "adjacent": {
+   "value": 0,
+   "exact_p": 0.47125251379363686,
+   "past_share": 0.4872286079182631,
+   "mean": 0.6666666666666666,
+   "p_two": 0.9425050275872737
+  },
+  "bands": {
+   "value": 5,
+   "exact_p": 0.4834218532460166,
+   "past_share": 0.49361430395913153,
+   "mean": 4.758727375857268,
+   "p_two": 1.0
+  },
+  "spread": {
+   "value": 37,
+   "exact_p": 0.057855927396483264,
+   "past_share": 0.05938697318007663,
+   "mean": 32.857142857142854,
+   "p_two": 0.6885989790130459
+  },
+  "repeats": {
+   "value": 0,
+   "exact_p": 0.40056463672459136,
+   "past_share": 0.40676883780332057,
+   "mean": 0.7999999999999998,
+   "p_two": 0.8011292734491827
+  }
+ },
+ "closest": {
+  "overlap": 4,
+  "draws": [
+   1230,
+   1112,
+   616,
+   489
+  ],
+  "p_max": 0.8875346565190463
+ },
+ "forecast": {
+  "tickets": [
+   3594991.2746390547,
+   3631137.0
+  ],
+  "jackpot": [
+   139118502773.0009,
+   139776125000
+  ],
+  "p_jackpot_won": 0.32513776489493074,
+  "jackpot_won": false,
+  "winners": {
+   "5": {
+    "pre": 104.0599546094687,
+    "post": 102.37357651053165,
+    "actual": 84
+   },
+   "4": {
+    "pre": 4915.420497937208,
+    "post": 4715.6092712991385,
+    "actual": 4591
+   },
+   "3": {
+    "pre": 80617.68904841607,
+    "post": 78626.91520666014,
+    "actual": 74955
+   }
+  }
+ }
+}

@@ -7,7 +7,9 @@ afterwards.
 So far the draws behave exactly like a fair lottery: no model beats a random ticket. Two things do change the value of a
 ticket: the size of the jackpot, and avoiding numbers other players like, so a jackpot is shared with fewer people.
 
-Python 3.9 or newer, standard library only. Run every command from the repo root.
+Python 3.9 or newer. Standard library only, except the engine (`engine/`, the `engine_ensemble` model,
+`engine_study.py` and the app's Engine goal), which needs numpy: `pip3 install numpy`. Run every command from the
+repo root.
 
 ## The one real edge found: the Lotto 5/35 jackpot share-out
 
@@ -36,10 +38,15 @@ own, so there is nothing to fetch by hand. The main menu offers:
     gives a 23.0% chance of a prize, against 22.6% for best value and 21.5% for random quick picks; 10 tickets can never
     pass 23.8%, ten times one ticket's 2.38%. The jackpot chance is the same for any different tickets.
   - *Best value*: tickets that avoid numbers other players like, so a jackpot would be shared with fewer people.
+  - *Cold-number model*: the `cold_weighted` model fills the most-chance layout with the least-drawn numbers, leaning on
+    them as much as its learned weight says, in typical shapes; the app shows the weight each run. Changing which
+    numbers fill a layout never changes its odds, so the chance of a prize stays at the maximum.
+  - *Engine*: the numpy engine's top-scored tickets, at most k-2 numbers shared, with its fitted weights, a verdict and
+    the set's chance of a prize next to the most-chance design's (see "The engine" below).
 - **Test models**: run every model in `models/` on every past draw of all three games and show how each compares
   with luck.
 
-Esc goes back a step. Without questions: `python3 prediction.py --game 645 --tickets 10` for tickets (`--goal value` for best value), and
+Esc goes back a step. Without questions: `python3 prediction.py --game 645 --tickets 10` for tickets (`--goal value`, `--goal cold` or `--goal engine` for the other ways), and
 `python3 lottery/backtest_models.py` for the model tests.
 
 ## Layout
@@ -48,6 +55,9 @@ Esc goes back a step. Without questions: `python3 prediction.py --game 645 --tic
 |---|---|
 | `lottery/` | the scripts |
 | `models/` | prediction models tested by `backtest_models.py`; one file per model |
+| `engine/` | the numpy scoring engine: five terms, the fitted weights and the greedy portfolio |
+| `tests/` | unit tests for the engine (`python3 -m unittest tests.test_engine`) |
+| `docs/` | the engine's design spec and implementation plan |
 | `data/` | every draw with prize and winner counts, collected from vietlott.vn |
 | `predictions/` | frozen pre-draw predictions, their reviews, and the running scorecard |
 | `results/` | generated output, not tracked except the log of model versions tried |
@@ -129,6 +139,14 @@ Rules! ch. 10-11 (0 = as good as a random ticket, below 0 = worse).
 | `frames_follow_10.py` | use the lens with the most hits over the last 10 draws | |
 | `frames_contrarian_10.py` | use the lens with the fewest hits over the last 10 draws | |
 | `frames_vote.py` | the numbers most of the eight lenses agree on | |
+| `cold_weighted.py` | least-drawn numbers since the first draw, trusted as much as a learned weight from 0 to 100 says: the weight rises when its 12 coldest numbers come up more than chance and falls when they don't; the last draw's numbers go last and the ticket takes the most typical shape (exact odds of its sum, odd/even, low/high, neighbours and bands) | the "cold numbers, a learned weight, don't repeat the last draw, spread beats a run" ideas in one model; `train_cold_weight.py` trains its settings |
+| `unique_hash.py` | every universe has its own hash, so a combination already drawn never comes again and the rest share its chance equally: a number gains 1 in 8.1 million for each draw it is behind | the "each draw is a unique hash" idea; `unique_hash_study.py` tests it |
+| `engine_ensemble.py` | the numpy engine: Bayes (decayed Dirichlet counts), Markov transitions, gap spread, four-way entropy and overlap with the last draw, combined with weights fitted by conditional logit on the draws so far and refitted every 100 draws; scores 200,000 sampled tickets and plays the best | the seven-module engine specification, with the weights fitted instead of hand-set |
+
+A spread shape comes up far more often than "six in a row", but only because it holds far more tickets: any single
+ticket, spread or in a row, has the same 1 in 8,145,060 chance, and the last draw's numbers come back at exactly the
+usual rate. The most common shape is five bands of five with one band holding two numbers (48% of Mega 6/45 draws), not
+one number in each of six bands (16%).
 
 Each model is a different lens on the same draws, and every draw some lens wins: the winning lens changes from draw
 to draw exactly as luck predicts, so the lens-switching models can't pick the next winner in advance either.
@@ -138,6 +156,24 @@ Why none beats a random ticket: if each draw is a fresh random pick, any 6 numbe
 per-number bias still consistent with 1,567 draws, even a perfect model would catch about 0.83 numbers and win back about
 1,500 VND of fixed prizes per 10,000 VND ticket instead of 1,370.
 
+## The engine
+
+`engine/` is a vectorized scorer. Every ticket gets five terms: how much the decayed counts favour its numbers
+(Bayes), how often its numbers followed the last draw (Markov), how evenly it is spread (gap), how varied its
+decades, residues and last digits are (entropy), and how many numbers it shares with the last draw (overlap). The
+composite is a weighted sum. The weights are not chosen by hand: each past draw is treated as the one ticket that
+came up against 1,000 random tickets that did not, and the weights that best tell them apart are fitted with an error
+bar. On a fair lottery every weight sits at 0 ± its error bar, which is what the fake lotteries in `engine_study.py`
+show and what the real draws show too. The app's Engine goal prints the weights, a verdict, and the set's chance of a
+prize next to the covering design's: the greedy portfolio lets tickets share up to k-2 numbers, so its chance of a
+prize is lower (15.1% against 23.0% for 10 Mega 6/45 tickets).
+
+```bash
+python3 -m unittest tests.test_engine        # the engine's own tests, about 15 seconds
+python3 lottery/engine_study.py              # diagnostics, weights and a portfolio for each game, under a minute
+python3 prediction.py --game 645 --tickets 10 --goal engine
+```
+
 ## Deeper studies
 
 | Script | What it does |
@@ -146,6 +182,8 @@ per-number bias still consistent with 1,567 draws, even a perfect model would ca
 | `power655_study.py` | the same for Power 6/55, plus Jackpot 2 and the bonus ball, a draw simulator and a long-run simulator |
 | `backtest_checkpoints.py` | rebuilds the sales, jackpot and winner forecasts at past draws and scores them |
 | `lotto535_study.py` | Lotto 5/35: odds with the special number, 16 randomness tests, sales, every jackpot share-out and what it paid, the next share-out forecast, tickets and a long-run replay |
+| `unique_hash_study.py` | the "every universe has its own hash" idea: exact repeats in each game, a Bayes factor against a fair machine, the jackpot gain if it were true, and when the data can decide |
+| `engine_study.py` | the engine on each game: chi-square, runs and KS diagnostics, the fitted weights with error bars on the real draws and on fake lotteries, the best ticket and a 10-ticket portfolio against the covering design |
 | `verify_tickets.py` | exact odds for a ticket set over all 8,145,060 possible 6/45 draws |
 
 Playing the lottery loses money on average. These scripts measure the odds; they do not change them.

@@ -66,6 +66,11 @@ def load_models(names):
     for path in sorted(MODELS_DIR.glob("*.py")):
         if path.name.startswith("_") or (names and path.stem not in names):
             continue
+        try:
+            load_module(path)
+        except ImportError as exc:
+            print(f"{path.stem} skipped: {exc}")
+            continue
         out[path.stem] = (path, hashlib.sha256(path.read_bytes()).hexdigest()[:12])
     if not out:
         raise SystemExit(f"no models found in {MODELS_DIR}")

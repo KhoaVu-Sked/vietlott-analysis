@@ -224,3 +224,162 @@ def follow_frames(state, past, n_balls):
 def frame_totals(fs, window):
     recent_hits, recent_scores = fs.hits[-window:], fs.scores[-window:]
     return [(sum(h[f] for h in recent_hits), sum(s[f] for s in recent_scores)) for f in range(len(FRAMES))]
+
+
+
+_SHAPES = {}
+COLD_WEIGHT, LAST_PENALTY, PATTERN_PENALTY = 1.5, 3.0, 20.0
+
+
+def shape_tables(n_balls, k):
+    key = (n_balls, k)
+    if key not in _SHAPES:
+        total = math.comb(n_balls, k)
+        ways = [[0] * (k * n_balls + 1) for _ in range(k + 1)]
+        ways[0][0] = 1
+        for x in range(1, n_balls + 1):
+            for j in range(k, 0, -1):
+                row, prev = ways[j], ways[j - 1]
+                for sm in range(k * n_balls, x - 1, -1):
+                    if prev[sm - x]:
+                        row[sm] += prev[sm - x]
+        odd_n, low_n = (n_balls + 1) // 2, n_balls // 2
+        dp = {(0, 0): 1}
+        for lo in range(1, n_balls + 1, 5):
+            size = min(5, n_balls - lo + 1)
+            nxt = {}
+            for (used, picked), w in dp.items():
+                nxt[(used, picked)] = nxt.get((used, picked), 0) + w
+                for c in range(1, min(size, k - picked) + 1):
+                    nxt[(used + 1, picked + c)] = nxt.get((used + 1, picked + c), 0) + w * math.comb(size, c)
+            dp = nxt
+        tables = {"sum": {sm: c / total for sm, c in enumerate(ways[k]) if c},
+                  "odd": {o: math.comb(odd_n, o) * math.comb(n_balls - odd_n, k - o) / total for o in range(k + 1)},
+                  "low": {v: math.comb(low_n, v) * math.comb(n_balls - low_n, k - v) / total for v in range(k + 1)},
+                  "adjacent": {m: math.comb(k - 1, m) * math.comb(n_balls - k + 1, k - m) / total for m in range(k)},
+                  "bands": {u: w / total for (u, got), w in dp.items() if got == k}}
+        _SHAPES[key] = {name: {v: math.log(pv / max(t.values())) for v, pv in t.items() if pv > 0}
+                        for name, t in tables.items()}
+    return _SHAPES[key]
+
+
+def shape_values(ticket, n_balls):
+    t = sorted(ticket)
+    return {"sum": sum(t), "odd": sum(x % 2 for x in t), "low": sum(x <= n_balls // 2 for x in t),
+            "adjacent": sum(1 for a, b in zip(t, t[1:]) if b == a + 1), "bands": len({(x - 1) // 5 for x in t})}
+
+
+def shape_rating(ticket, n_balls):
+    tables = shape_tables(n_balls, len(ticket))
+    return sum(tables[name].get(v, -50.0) for name, v in shape_values(ticket, n_balls).items())
+
+
+def good_pattern(ticket):
+    t = sorted(ticket)
+    per_band = {}
+    for x in t:
+        per_band[(x - 1) // 5] = per_band.get((x - 1) // 5, 0) + 1
+    adjacent = sum(1 for a, b in zip(t, t[1:]) if b == a + 1)
+    run3 = any(t[i + 2] == t[i] + 2 for i in range(len(t) - 2))
+    return max(per_band.values()) <= 2 and adjacent <= 1 and not run3
+
+
+def coldness(tracker, n_balls, k, window=30):
+    w = max(1, min(window, tracker.t))
+    expected = w * k / n_balls
+    return {i: (expected - tracker.recent(i, window)) / math.sqrt(expected) + 0.05 * math.log(tracker.gap(tracker.t, i))
+            for i in range(1, n_balls + 1)}
+
+
+def alltime_coldness(tracker, n_balls, k):
+    t = max(1, tracker.t)
+    p = k / n_balls
+    sd = math.sqrt(t * p * (1 - p))
+    return {i: (t * p - tracker.cum[tracker.t][i]) / sd for i in range(1, n_balls + 1)}
+
+
+def cold_pattern_tickets(past, n_balls, k, count=1, seed=2026, tracker=None, iters=None, z=None,
+                         cold_weight=COLD_WEIGHT):
+    import random
+    import coverage
+    tr = tracker
+    if tr is None:
+        tr = Tracker(n_balls)
+        for d in past:
+            tr.add(d)
+    rng = random.Random(seed * 1_000_003 + len(past))
+    if z is None:
+        z = coldness(tr, n_balls, k)
+    last = set(past[-1]) if past else set()
+    design = coverage.design(count, n_balls, seed, size=k) if count > 1 else [list(range(1, k + 1))]
+    labels = sorted({x for t in design for x in t}, key=lambda x: -sum(x in t for t in design))
+    order = sorted(range(1, n_balls + 1), key=lambda i: (i in last, -z[i], i))
+    assign = dict(zip(labels, order))
+
+    def ticket_score(t):
+        nums = [assign[x] for x in t]
+        return (shape_rating(nums, n_balls) + cold_weight * sum(z[x] for x in nums) / k
+                - LAST_PENALTY * sum(x in last for x in nums) - (0 if good_pattern(nums) else PATTERN_PENALTY))
+
+    scores = [ticket_score(t) for t in design]
+    where = {x: [j for j, t in enumerate(design) if x in t] for x in labels}
+    free = [i for i in range(1, n_balls + 1) if i not in assign.values()]
+    for _ in range(iters or (300 if count == 1 else 4000)):
+        a = rng.choice(labels)
+        if free and rng.random() < 0.5:
+            fi = rng.randrange(len(free))
+            old = assign[a]
+            assign[a] = free[fi]
+            touched = where[a]
+            new = [ticket_score(design[j]) for j in touched]
+            if sum(new) > sum(scores[j] for j in touched):
+                for j, v in zip(touched, new):
+                    scores[j] = v
+                free[fi] = old
+            else:
+                assign[a] = old
+        else:
+            b = rng.choice(labels)
+            if a == b:
+                continue
+            assign[a], assign[b] = assign[b], assign[a]
+            touched = sorted(set(where[a]) | set(where[b]))
+            new = [ticket_score(design[j]) for j in touched]
+            if sum(new) > sum(scores[j] for j in touched):
+                for j, v in zip(touched, new):
+                    scores[j] = v
+            else:
+                assign[a], assign[b] = assign[b], assign[a]
+    return sorted(sorted(assign[x] for x in t) for t in design)
+
+
+class ColdLearner:
+    def __init__(self, n_balls, k, list_size=12, step=2.0, start=50.0, trust_max=3.0):
+        self.tr = Tracker(n_balls)
+        self.n, self.k, self.m = n_balls, k, min(list_size, n_balls - k)
+        self.step, self.trust_max = step, trust_max
+        self.weight = start
+        self.weights, self.list_hits = [], []
+
+    def cold_list(self):
+        z = alltime_coldness(self.tr, self.n, self.k)
+        return sorted(range(1, self.n + 1), key=lambda i: (-z[i], i))[:self.m], z
+
+    def luck(self):
+        return self.k * self.m / self.n
+
+    def add(self, draw):
+        if self.tr.t >= 10:
+            listed, _ = self.cold_list()
+            hits = len(set(listed) & set(draw))
+            q = self.m / self.n
+            sd = math.sqrt(self.k * q * (1 - q) * (self.n - self.k) / (self.n - 1))
+            self.weight = min(100.0, max(0.0, self.weight + self.step * (hits - self.luck()) / sd))
+            self.list_hits.append(hits)
+        self.weights.append(self.weight)
+        self.tr.add(draw)
+
+    def tickets(self, past, count=1, seed=2026):
+        _, z = self.cold_list()
+        return cold_pattern_tickets(past, self.n, self.k, count=count, seed=seed, tracker=self.tr, z=z,
+                                    cold_weight=self.trust_max * self.weight / 100)

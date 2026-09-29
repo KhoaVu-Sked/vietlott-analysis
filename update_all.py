@@ -24,6 +24,7 @@ import update
 FIRST_WAVE = [
     ("Mega 6/45 full study", ["power645_study.py", "--no-update"], "latest_run.txt", True),
     ("Lotto 5/35 study and share-out forecast", ["lotto535_study.py", "--no-update"], "lotto535_run.txt", False),
+    ("Engine study: diagnostics and fitted weights", ["engine_study.py", "--no-update"], "engine_study.txt", True),
     ("Model tests, all three games", ["backtest_models.py", "--no-update"], "backtest_models.txt", False),
     ("Forecast backtest, last 10 draws", ["backtest_checkpoints.py", "--count", "10"], "checkpoints_10x1.txt", False),
     ("Forecast backtest, last 300 draws", ["backtest_checkpoints.py", "--count", "300"], "checkpoints_300x1.txt", False),
@@ -39,7 +40,7 @@ SECOND_WAVE = [
      True),
     ("Freeze the next Mega 6/45 prediction", ["predict_draw.py", "--no-update"], "predict_draw.txt", False),
 ]
-FINE_EXITS = ("already exists", "already happened")
+FINE_EXITS = ("already exists", "already happened", "needs numpy")
 
 
 def run_step(step):

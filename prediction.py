@@ -31,7 +31,17 @@ WEEKDAY = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "
 GAME_NAME = {"645": "Mega 6/45", "655": "Power 6/55", "535": "Lotto 5/35"}
 GAMES = ("645", "655", "535")
 GOALS = {"win": ("Most chance to win", "every number used, least overlap"),
-         "value": ("Best value", "bigger jackpot share, avoids popular numbers")}
+         "value": ("Best value", "bigger jackpot share, avoids popular numbers"),
+         "cold": ("Cold-number model", "least-drawn numbers first, typical shapes"),
+         "engine": ("Engine", "five-term scorer with fitted weights, greedy portfolio")}
+GAME_GOALS = {"645": ("win", "value", "cold", "engine"), "655": ("win", "value", "cold", "engine"),
+              "535": ("win", "cold", "engine")}
+HOW = {"win": "most chance to win, least overlap", "value": "best value, avoiding popular numbers",
+       "cold": "cold-number model, typical shapes", "engine": "engine: fitted five-term scorer"}
+WHY = {"win": "They are spread over every number with the least overlap, for the most chance of a prize.",
+       "value": "They avoid numbers other players like, so a jackpot is shared with fewer people.",
+       "cold": "They use the least-drawn numbers first, in typical shapes, laid out for the most chance of a prize.",
+       "engine": "They are the engine's top-scored tickets, at most k-2 numbers shared, weighted as the fitted terms say."}
 
 
 @contextlib.contextmanager
@@ -114,10 +124,29 @@ def mega645(k, seed, status, goal):
     fc = s.forecast_sales(sales)
     scorer = o.Scorer(bundle, g, recent, fc["jackpot"], fc["tickets"])
     status("Choosing your tickets")
-    tickets = coverage.design(k, s.N_BALLS, seed) if goal == "win" else spread_design(o.optimise, scorer, k, s.N_BALLS, seed)
+    extra = []
+    if goal == "cold":
+        tickets, cold_line = cold_model([d["result"] for d in draws], s.N_BALLS, 6, k, seed)
+        extra = [cold_line]
+    elif goal == "engine":
+        tickets, extra = engine_model([d["result"] for d in draws], s.N_BALLS, 6, k, seed, status)
+        if tickets is None:
+            tickets, goal = coverage.design(k, s.N_BALLS, seed), "win"
+    elif goal == "win":
+        tickets = coverage.design(k, s.N_BALLS, seed)
+    else:
+        tickets = spread_design(o.optimise, scorer, k, s.N_BALLS, seed)
     status("Working out the exact odds" if k <= EXACT_LIMIT else f"Simulating {SIMS:,} draws")
-    p_any = float(v.summarise(v.enumerate_all(tickets), k)["any"]) if k <= EXACT_LIMIT else simulated_any(
-        tickets, s.N_BALLS, seed)
+
+    def any_prize(ts):
+        if k <= EXACT_LIMIT:
+            return float(v.summarise(v.enumerate_all(ts), k)["any"])
+        return simulated_any(ts, s.N_BALLS, seed)
+
+    p_any = any_prize(tickets)
+    if goal == "engine":
+        extra.append(f"any prize: this set {p_any * 100:.2f}%, most-chance design"
+                     f" {any_prize(coverage.design(k, s.N_BALLS, seed)) * 100:.2f}%")
     share = s.jackpot_share_check(sales)
     p_won = 1 - math.exp(-fc["tickets"] * s.P_MATCH[6] * share["winners"] / share["expected_winners"])
     return {"game": "Mega 6/45", "goal": goal, "p_one": sum(s.P_MATCH[3:]),
@@ -125,7 +154,7 @@ def mega645(k, seed, status, goal):
             "n_draws": len(draws), "tickets": tickets, "p_any": p_any, "p_jackpot": k / s.C_TOTAL,
             "ev": sum(scorer.ev(t)["ev"] for t in tickets),
             "forecast": [f"jackpot at the draw ≈ {fc['jackpot']/1e9:.1f} tỷ (now {fc['advertised']/1e9:.1f} tỷ)"
-                         f" · someone wins it: {p_won*100:.0f}%"]}
+                         f" · someone wins it: {p_won*100:.0f}%"] + extra}
 
 
 def power655(k, seed, status, goal):
@@ -139,10 +168,29 @@ def power655(k, seed, status, goal):
         fc = sp.forecast(sales)
         scorer = sp.Scorer(bundle, fc["j1"], fc["j2"], fc["tickets"])
         status("Choosing your tickets")
-        tickets = coverage.design(k, sp.N, seed) if goal == "win" else spread_design(o.optimise, scorer, k, sp.N, seed)
+        extra = []
+        if goal == "cold":
+            tickets, cold_line = cold_model([d["result"] for d in draws], sp.N, 6, k, seed)
+            extra = [cold_line]
+        elif goal == "engine":
+            tickets, extra = engine_model([d["result"] for d in draws], sp.N, 6, k, seed, status)
+            if tickets is None:
+                tickets, goal = coverage.design(k, sp.N, seed), "win"
+        elif goal == "win":
+            tickets = coverage.design(k, sp.N, seed)
+        else:
+            tickets = spread_design(o.optimise, scorer, k, sp.N, seed)
         status("Working out the exact odds" if k <= EXACT_LIMIT else f"Simulating {SIMS:,} draws")
-        exact = sp.exact_summary(tickets)[0] if k <= EXACT_LIMIT else {
-            "any": simulated_any(tickets, sp.N, seed), **sp.jackpot_chances(tickets)}
+
+        def any_prize(ts):
+            if k <= EXACT_LIMIT:
+                return sp.exact_summary(ts)[0]
+            return {"any": simulated_any(ts, sp.N, seed), **sp.jackpot_chances(ts)}
+
+        exact = any_prize(tickets)
+        if goal == "engine":
+            extra.append(f"any prize: this set {exact['any'] * 100:.2f}%, most-chance design"
+                         f" {any_prize(coverage.design(k, sp.N, seed))['any'] * 100:.2f}%")
         j1_w = sum(r["j1_winners"] for r in sales)
         e1 = sum(r["tickets"] * sp.P_J1 for r in sales)
         p_won1 = 1 - math.exp(-fc["tickets"] * sp.P_J1 * j1_w / e1)
@@ -151,7 +199,45 @@ def power655(k, seed, status, goal):
                 "n_draws": len(draws), "tickets": tickets, "p_any": exact["any"], "p_jackpot": exact["j1_any"],
                 "p_jackpot2": exact["j2_any"], "ev": sum(scorer.ev(t)["ev"] for t in tickets),
                 "forecast": [f"Jackpot 1 at the draw ≈ {fc['j1']/1e9:.1f} tỷ · someone wins it: {p_won1*100:.0f}%",
-                             f"Jackpot 2 ≈ {fc['j2']/1e9:.2f} tỷ · needs 5 numbers plus the bonus ball"]}
+                             f"Jackpot 2 ≈ {fc['j2']/1e9:.2f} tỷ · needs 5 numbers plus the bonus ball"]
+                            + extra}
+
+
+def cold_model(results, n_balls, size, k, seed):
+    import model_tools as mt
+    ln = mt.ColdLearner(n_balls, size)
+    for d in results:
+        ln.add(d)
+    caught = sum(ln.list_hits) / len(ln.list_hits)
+    line = (f"cold-number model weight now {ln.weight:.0f}/100 · its {ln.m} coldest numbers caught {caught:.2f} per draw,"
+            f" luck {ln.luck():.2f}")
+    return ln.tickets(results, count=k, seed=seed), line
+
+
+def engine_model(results, n_balls, size, k, seed, status):
+    try:
+        import numpy as np
+        from engine import Engine, candidates
+    except ImportError:
+        return None, ["the Engine goal needs numpy: pip3 install numpy"]
+    status(f"Fitting the engine on {len(results):,} draws")
+    eng = Engine(n_balls, size, seed=seed)
+    eng.extend(results)
+    fit = eng.fit()
+    if math.comb(n_balls, size) <= candidates.MAX_ALL:
+        status(f"Scoring all {math.comb(n_balls, size):,} tickets")
+        pool = candidates.all_tickets(n_balls, size)
+    else:
+        status("Scoring 1,000,000 sampled tickets")
+        pool = candidates.sample(n_balls, size, 1_000_000, np.random.default_rng((seed, 1)))
+    tickets = eng.portfolio(k, pool)
+    terms = fit.as_dict()
+    parts = [f"{name} {v['w']:+.2f}±{v['se']:.2f}" for name, v in terms.items()]
+    flagged = [name for name, v in terms.items() if abs(v["z"]) > 3]
+    lines = ["engine weights ± error: " + " · ".join(parts[:3]), "                        " + " · ".join(parts[3:]),
+             "all within error bars: nothing beyond a fair lottery" if not flagged
+             else "beyond 3 errors: " + ", ".join(flagged) + " (check the study before trusting it)"]
+    return tickets, lines
 
 
 def lotto535(k, seed, status, goal):
@@ -159,18 +245,38 @@ def lotto535(k, seed, status, goal):
     status("Reading 900+ past draws and the share-out history")
     f = ls.forecast_next(seed)
     status("Choosing your tickets")
-    tickets = ls.with_specials(coverage.design(k, ls.N, seed, size=ls.K))
+    extra = []
+    rows, _ = ls.load_draws()
+    if goal == "cold":
+        mains, cold_line = cold_model([r["result"] for r in rows], ls.N, ls.K, k, seed)
+        extra = [cold_line]
+    elif goal == "engine":
+        mains, extra = engine_model([r["result"] for r in rows], ls.N, ls.K, k, seed, status)
+        if mains is None:
+            mains, goal = coverage.design(k, ls.N, seed, size=ls.K), "win"
+    else:
+        mains = coverage.design(k, ls.N, seed, size=ls.K)
+    tickets = ls.with_specials(mains)
     status("Working out the exact odds" if k <= 2 * EXACT_LIMIT else f"Simulating {SIMS:,} draws")
-    if k <= 2 * EXACT_LIMIT:
-        money, p_real = ls.exact_money(tickets, dict(ls.BASE, jackpot=f["jackpot"]))
+
+    def any_prize(ts):
+        if k <= 2 * EXACT_LIMIT:
+            return ls.exact_money(ts, dict(ls.BASE, jackpot=f["jackpot"]))
+        return None, simulated_any([m for m, _ in ts], ls.N, seed, size=ls.K)
+
+    money, p_real = any_prize(tickets)
+    if money is not None:
         total = sum(money.values())
         p_refund = sum(w for v, w in money.items() if v > 0) / total
     else:
-        p_real = simulated_any([m for m, _ in tickets], ls.N, seed, size=ls.K)
         p_refund = 1 - (1 - p_real) * (1 - min(k, ls.S) / ls.S)
+    if goal == "engine":
+        p_design = any_prize(ls.with_specials(coverage.design(k, ls.N, seed, size=ls.K)))[1]
+        extra.append(f"any prize: this set {p_real * 100:.2f}%, most-chance design {p_design * 100:.2f}%")
     p_won = 1 - math.exp(-f["tickets"] * ls.P_JP * f["coverage"])
     lines = [f"jackpot at the draw ≈ {f['jackpot']/1e9:.2f} tỷ (now {f['jackpot_now']/1e9:.2f} tỷ) · someone wins it:"
              f" {p_won*100:.0f}%"]
+    lines += extra
     so = f.get("share_out")
     if f["share_out_now"]:
         lines.append(f"SHARE-OUT DRAW: if nobody wins the jackpot ({so['p_share']*100:.0f}% likely), it is shared out to the"
@@ -182,7 +288,7 @@ def lotto535(k, seed, status, goal):
         lines.append(f"next jackpot share-out: {when_so}")
         lines.append(f"share-out forecast {so['ev']/1e4:.2f}× the price after tax · past {f['history_after_tax']/1e4:.2f}×,"
                      f" the last 6 {f['last6_after_tax']/1e4:.2f}×")
-    return {"game": "Lotto 5/35", "goal": "win", "p_one": ls.P_TIER["first"] + ls.P_TIER["second"] + ls.P_TIER["third"]
+    return {"game": "Lotto 5/35", "goal": goal, "p_one": ls.P_TIER["first"] + ls.P_TIER["second"] + ls.P_TIER["third"]
             + ls.P_TIER["fourth"] + ls.P_TIER["fifth"] + ls.P_JP, "draw": f["draw"], "date": f["date"], "time": f["time"],
             "close": f"sales close {'12:30' if f['time'] == '13:00' else '20:30'}", "n_draws": f["n_draws"], "tickets": tickets, "p_any": p_real,
             "p_refund": p_refund, "p_jackpot": k / ls.TOTAL, "ev": k * f["ev"], "forecast": lines,
@@ -226,9 +332,7 @@ def plain_report(r, k, note):
     if "p_refund" in r:
         lines.append(f"chance of at least the 10,000 VND refund: {r['p_refund']*100:.1f}%")
     lines.append(f"average value back: {r['ev']:,.0f} VND for {cost:,} VND ({r['ev']/cost:.2f}x the price)")
-    why = ("They are spread over every number with the least overlap, for the most chance of a prize."
-           if r["goal"] == "win" else "They avoid numbers other players like, so a jackpot is shared with fewer people.")
-    lines += ["", "These numbers are not a prediction: every combination is equally likely.", why]
+    lines += ["", "These numbers are not a prediction: every combination is equally likely.", WHY[r["goal"]]]
     return "\n".join(lines)
 
 
@@ -249,8 +353,7 @@ def styled_report(term, r, k, note, seconds):
     height = math.ceil(len(cells) / columns)
     rows = ["    ".join(cells[c * height + row] for c in range(columns) if c * height + row < len(cells))
             for row in range(height)]
-    how = "most chance to win, least overlap" if r["goal"] == "win" else "best value, avoiding popular numbers"
-    title = f"Your {k} ticket{'s' if k > 1 else ''} · {cost:,} VND · {how}"
+    title = f"Your {k} ticket{'s' if k > 1 else ''} · {cost:,} VND · {HOW[r['goal']]}"
     lines += [""] + term.box(rows, title=title, colour=s.accent)
     filled = round(r["p_any"] * 24)
     bar = s("█" * filled, s.green) + s("░" * (24 - filled), s.grey)
@@ -363,19 +466,17 @@ def session(seed, fetch):
                     continue
                 game = GAMES[idx]
                 trail.append(answer("Lottery", GAME_NAME[game]))
-                state = "goal" if game != "535" else "tickets"
-                if game == "535":
-                    goal = "win"
-                    trail.append(answer("Goal", GOALS["win"][0]))
+                state = "goal"
             elif state == "goal":
                 fresh()
-                idx = term.menu("What matters most to you?", [GOALS["win"], GOALS["value"]],
+                choices = GAME_GOALS[game]
+                idx = term.menu("How should the tickets be picked?", [GOALS[g] for g in choices],
                                 "↑/↓ to move · Enter to choose · Esc to go back")
                 if idx is None:
                     trail = trail[:1]
                     state = "lottery"
                     continue
-                goal = ("win", "value")[idx]
+                goal = choices[idx]
                 trail.append(answer("Goal", GOALS[goal][0]))
                 state = "tickets"
             elif state == "tickets":
@@ -383,8 +484,8 @@ def session(seed, fetch):
                 k = term.ask_number("How many tickets will you buy?", 10, 1, MAX_TICKETS,
                                     f"1-{MAX_TICKETS} tickets, {TICKET:,} VND each · Enter to confirm · Esc to go back")
                 if k is None:
-                    trail = trail[:2] if game != "535" else trail[:1]
-                    state = "goal" if game != "535" else "lottery"
+                    trail = trail[:2]
+                    state = "goal"
                     continue
                 fresh(answer("Tickets", str(k)))
                 fetch_now = fetch and game not in notes
@@ -429,6 +530,9 @@ def main():
     ap.add_argument("--no-update", action="store_true")
     ap.add_argument("--goal", choices=sorted(GOALS), default="win")
     args = ap.parse_args()
+    if args.game and args.goal not in GAME_GOALS[args.game]:
+        ap.error(f"--goal {args.goal} is not offered for {GAME_NAME[args.game]}; choose from "
+                 f"{', '.join(GAME_GOALS[args.game])}")
     if args.game and args.tickets:
         if not 1 <= args.tickets <= MAX_TICKETS:
             raise SystemExit(f"--tickets must be 1 to {MAX_TICKETS}")
